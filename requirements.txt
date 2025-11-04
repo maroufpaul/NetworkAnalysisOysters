@@ -1,0 +1,9 @@
+numpy
+pandas
+scipy
+openpyxl
+pathlib
+matplotlib
+jupyter
+seaborn
+amplpy

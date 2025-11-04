@@ -1,0 +1,57 @@
+================================================================================
+MIQP WITH COMMUNITY CONSTRAINTS + VARIABLE SIZING
+================================================================================
+
+Model: oyster_comm_size.mod
+Data:  oyster_quad.dat + oyster_comm.dat + oyster_size.dat
+
+Objective (raw):        51081.95
+Objective (normalized): 12770.49
+Scaling factor:         4.00×
+
+Sites selected:   25
+Total area:       1000.0 acres
+Average size:     40.0 acres/site
+
+NORMALIZATION EXPLANATION:
+--------------------------------------------------------------------------------
+The raw objective (51081.95) is higher than binary models
+because reefs are larger (avg 40.0 acres vs implicit 20).
+
+For fair comparison with binary models, we normalize by:
+  scaling_factor = (avg_size / Sbar)² = (40.0 / 20)² = 4.00
+  obj_normalized = 51081.95 / 4.00 = 12770.49
+
+This normalized value is comparable to:
+  - Baseline (binary, no constraints): 13,692
+  - Community (binary, equity): 12,792
+--------------------------------------------------------------------------------
+
+Selected sites (sorted by size):
+--------------------------------------------------------------------------------
+  Site  10  │    50.0 acres
+  Site  11  │    50.0 acres
+  Site  12  │    50.0 acres
+  Site  15  │    50.0 acres
+  Site  16  │    50.0 acres
+  Site  27  │    50.0 acres
+  Site  28  │    50.0 acres
+  Site  29  │    50.0 acres
+  Site  31  │    50.0 acres
+  Site  32  │    50.0 acres
+  Site  33  │    50.0 acres
+  Site  40  │    40.0 acres
+  Site  41  │    40.0 acres
+  Site  44  │    40.0 acres
+  Site  49  │    40.0 acres
+  Site  51  │    40.0 acres
+  Site  52  │    40.0 acres
+  Site  53  │    40.0 acres
+  Site  54  │    40.0 acres
+  Site  59  │    40.0 acres
+  Site  37  │    40.0 acres
+  Site  21  │    35.0 acres
+  Site  42  │     5.0 acres
+  Site  47  │     5.0 acres
+  Site  56  │     5.0 acres
+--------------------------------------------------------------------------------

@@ -1,0 +1,27 @@
+MIQP (prof) with sizing
+picked 25 sites (x=1)
+  label  10  size=  50.000
+  label  11  size=  50.000
+  label  12  size=  50.000
+  label  15  size=  50.000
+  label  16  size=  50.000
+  label  17  size=  50.000
+  label  20  size=   5.000
+  label  26  size=  50.000
+  label  27  size=  50.000
+  label  28  size=  50.000
+  label  29  size=  50.000
+  label  31  size=  50.000
+  label  32  size=  50.000
+  label  33  size=  50.000
+  label  36  size=   5.000
+  label  37  size=   5.000
+  label  40  size=  40.000
+  label  41  size=  40.000
+  label  44  size=  40.000
+  label  49  size=  15.000
+  label  51  size=  40.000
+  label  52  size=  40.000
+  label  53  size=  40.000
+  label  54  size=  40.000
+  label  59  size=  40.000

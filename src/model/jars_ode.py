@@ -1,5 +1,7 @@
 # src/model/jars_ode.py
 
+#Dr. Leah shaw's ODE models JARS ODE model implementation
+
 import numpy as np
 import pandas as pd
 from pathlib import Path

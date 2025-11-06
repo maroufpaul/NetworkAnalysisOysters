@@ -74,7 +74,7 @@ NetworkAnalysisOysters/
 │   ├── validate_miqp_with_ode.py   # Runs ODE to validate MIQP outcomes
 │
 ├── src/                           # Core algorithms and biological model
-│   ├── model/jars_ode.py           # Coupled ODE life stage model
+│   ├── model/jars_ode.py           # Coupled ODE life stage model (Professor Leah Shaw's Work, she provided the math lab code i just converted to python)
 │   ├── opt/                        # Optimization heuristics
 │   │   ├── greedy.py               # Forward selection
 │   │   ├── local_search.py         # Swap & tabu-based refinement

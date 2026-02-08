@@ -1,6 +1,5 @@
 MIQP with community minimums (no sizing)
 picked 25 sites
-  label   1
   label  10
   label  12
   label  15
@@ -19,6 +18,7 @@ picked 25 sites
   label  42
   label  44
   label  47
+  label  48
   label  49
   label  51
   label  52

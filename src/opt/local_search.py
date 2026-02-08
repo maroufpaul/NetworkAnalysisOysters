@@ -11,7 +11,7 @@ def local_swap_hillclimb(
     start_sites,
     tmax: int = 1000,
     P1scaling: float = 0.5,
-    P0_mode: str = "constant",
+    P0_mode: str = "realistic",
     consP0: float = 170.0,
     max_passes: int = 50,
     improve_tol: float = 1e-6,

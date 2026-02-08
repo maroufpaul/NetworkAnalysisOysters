@@ -1,4 +1,4 @@
-# scripts/run_miqp.py
+# scripts/run_miqp_test.py
 """
 Very loud MIQP runner.
 - loads Excel
@@ -61,7 +61,7 @@ def main():
 
     # 6) AMPL
     ampl = AMPL()
-    ampl.option["solver"] = "gurobi"  # you said you want gurobi
+    ampl.option["solver"] = "gurobi"  #  want gurobi
     # show gurobi output too
     ampl.option["gurobi_options"] = "outlev=1"
     print(">>> [run_miqp] AMPL created, solver=gurobi", flush=True)

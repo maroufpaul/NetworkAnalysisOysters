@@ -19,7 +19,8 @@ CANDIDATE_SITES = np.array([
 ], dtype=int)
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
-DEFAULT_CONNECTIVITY_FILE = DATA_DIR / "nk_All_060102final_56sites_Model.xlsx"
+DEFAULT_CONNECTIVITY_FILE = DATA_DIR / "nk_All_060102final_56sites_Model.xlsx"  # "nk_All_060102final_56sites_Model.xlsx"
+
 
 
 def load_connectivity(path: str | Path | None = None):

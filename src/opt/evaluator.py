@@ -16,7 +16,7 @@ def evaluate_subset(
     key_all: np.ndarray,
     tmax: int = 1000,
     P1scaling: float = 0.5,
-    P0_mode: str = "constant",
+    P0_mode: str = "realistic",
     consP0: float = 170.0,
 ) -> float:
     """

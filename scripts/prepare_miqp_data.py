@@ -3,7 +3,9 @@
 from pathlib import Path
 import numpy as np
 import pandas as pd
+import argparse
 
+# Site labels to drop (same as before)
 UNWANTED = [66, 67, 68, 69, 70, 71, 72]
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -11,68 +13,114 @@ DATA_DIR = ROOT / "data"
 AMPL_DIR = ROOT / "ampl"
 RUNS_DIR = ROOT / "runs"
 
-EXCEL_PATH = DATA_DIR / "nk_All_060102final_56sites_Model.xlsx"
-OUT_DAT = AMPL_DIR / "oyster_data.dat"
-OUT_CSV = RUNS_DIR / "oyster_data_preview.csv"
+# Available connectivity matrices
+MATRIX_FILES = {
+    "1": "nk_All_060102final_56sites_Model.xlsx",
+    "2": "nk_All_060103final_56sites_Model.xlsx",
+}
+
+# Only this file will be regenerated
+OUT_DAT_QUAD = AMPL_DIR / "oyster_quad.dat"
 
 
 def main():
-    # load original excel
-    arr = pd.read_excel(EXCEL_PATH, header=None).values
-    labels = arr[0, 1:].astype(int)
-    P = arr[1:, 1:].astype(float)
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--matrix",
+        choices=MATRIX_FILES.keys(),
+        default="1",
+        help="Which connectivity matrix to use (1 or 2)",
+    )
+    args = parser.parse_args()
 
-    # drop labels 66–72
+    xlsx_name = MATRIX_FILES[args.matrix]
+    excel_path = DATA_DIR / xlsx_name
+
+    RUNS_DIR.mkdir(exist_ok=True)
+    AMPL_DIR.mkdir(exist_ok=True)
+
+    print(f"[prepare] Using matrix {args.matrix}: {xlsx_name}")
+
+    # ------------------------------------------------------------------
+    # 1. Load Excel and drop unwanted labels
+    # ------------------------------------------------------------------
+    arr = pd.read_excel(excel_path, header=None).values
+    labels = arr[0, 1:].astype(int)         # first row (except first col)
+    P_full = arr[1:, 1:].astype(float)      # main matrix
+
+    # Drop sites 66–72
     mask = ~np.isin(labels, UNWANTED)
     labels = labels[mask]
-    P = P[np.ix_(mask, mask)]
+    P = P_full[np.ix_(mask, mask)]
+    n = len(labels)
+    print(f"[prepare] kept {n} sites after dropping {UNWANTED}")
 
-    # scale internal
+    # ------------------------------------------------------------------
+    # 2. Build surrogate weights W
+    # ------------------------------------------------------------------
+    # scale internal connectivity
     P1scaling = 0.5
     P = P * P1scaling
 
+    # remove self-loops (no reward for staying on same reef)
+    #np.fill_diagonal(P, 0.0)
+
     # constant external larvae
-    Pe = 170.0 * np.ones(len(labels), dtype=float)
+    Pe = 170.0 * np.ones(n, dtype=float)
 
-    # no self-loops
-    np.fill_diagonal(P, 0.0)
+    # surrogate step: fold in median A* via |A*|^alpha
+    A_STAR = 0.05675   # median equilibrium adults for a single reef
+    ALPHA = 1.72
+    W = P * (A_STAR ** ALPHA)
 
-    # 1) write CSV for us to look at
-    df = pd.DataFrame(P, index=labels, columns=labels)
-    df.to_csv(OUT_CSV, index=True)
-    print(f"[prepare] wrote {OUT_CSV}")
+    # ------------------------------------------------------------------
+    # 3. Preview CSVs (for sanity checks)
+    # ------------------------------------------------------------------
+    preview_path = RUNS_DIR / f"oyster_data_preview_matrix{args.matrix}.csv"
+    pd.DataFrame(W, index=labels, columns=labels).to_csv(preview_path)
+    print(f"[prepare] wrote {preview_path}")
 
-    # 2) write AMPL .dat in **sparse** format
-    #    this is the important part
-    with open(OUT_DAT, "w", encoding="utf-8") as f:
-        f.write("# auto-generated MIQP data for oyster problem\n\n")
+    mapping_path = RUNS_DIR / f"oyster_index_mapping_matrix{args.matrix}.csv"
+    pd.DataFrame({"index": np.arange(n, dtype=int), "site_id": labels}).to_csv(
+        mapping_path, index=False
+    )
+    print(f"[prepare] wrote {mapping_path}")
+
+    # ------------------------------------------------------------------
+    # 4. Write AMPL data (ONLY oyster_quad.dat)
+    #    Indices are 0..n-1; labels are stored separately in CSV mapping.
+    # ------------------------------------------------------------------
+    with open(OUT_DAT_QUAD, "w", encoding="utf-8") as f:
+        f.write("# auto-generated MIQP data for oyster problem\n")
+        f.write(f"# matrix version: {args.matrix}\n\n")
 
         # set of sites
         f.write("set N :=\n")
-        for lab in labels:
-            f.write(f"  {lab}\n")
+        for i in range(n):
+            f.write(f"  {i}\n")
         f.write(";\n\n")
 
         # how many to pick
-        f.write("param k := 25;\n\n")
+        f.write("param K := 25;\n\n")
 
-        # external larvae
+        # external larvae Pe[i]
         f.write("param Pe :=\n")
-        for lab, pe_val in zip(labels, Pe):
-            f.write(f"  {lab} {pe_val:.4f}\n")
+        for i in range(n):
+            f.write(f"  {i} {Pe[i]:.4f}\n")
         f.write(";\n\n")
 
-        # internal matrix as sparse triples
-        f.write("param P1 :=\n")
-        for i, li in enumerate(labels):
-            for j, lj in enumerate(labels):
-                val = float(P[i, j])
+        # internal surrogate weights W[i,j] in sparse format
+        f.write("param W :=\n")
+        for i in range(n):
+            for j in range(n):
+                val = float(W[i, j])
                 if val != 0.0:
-                    # AMPL sparse entry: [row, col] value
-                    f.write(f"  [{li}, {lj}] {val:.6f}\n")
+                    f.write(f"  [{i}, {j}] {val:.6f}\n")
         f.write(";\n")
 
-    print(f"[prepare] wrote {OUT_DAT}")
+    print(f"[prepare] wrote {OUT_DAT_QUAD}")
+    print("[prepare] done.")
+    print("NOTE: oyster_size.dat and oyster_comm.dat were NOT modified.")
 
 
 if __name__ == "__main__":

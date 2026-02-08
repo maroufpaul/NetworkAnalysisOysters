@@ -1,0 +1,575 @@
+Matrix 1:
+
+-------------------- GREEDY REALISTIC P0(EXTERNAL) -------------------  
+
+
+[scripts] greedy finished
+  sites: [19, 4, 38, 39, 55, 24, 35, 47, 42, 1, 18, 60, 48, 6, 5, 56, 57, 3, 53, 49, 31, 40, 10, 41, 32]
+  score: 1.734774
+
+
+-------------------- POST GREEDY SWAP  REALISTIC P0(EXTERNAL) -------------------
+
+[local] start score = 1.734774 on 25 sites
+[local] pass 1: 3 → 37 | Δ=0.029015 | score=1.763789 | 168.4s
+[local] pass 2: 57 → 36 | Δ=0.025308 | score=1.789097 | 173.0s
+[local] pass 3: 56 → 20 | Δ=0.019878 | score=1.808975 | 173.4s
+[local] pass 4: 48 → 21 | Δ=0.013409 | score=1.822384 | 175.7s
+[local] pass 5: 18 → 15 | Δ=0.010286 | score=1.832670 | 179.7s
+[local] pass 6: 1 → 30 | Δ=0.006871 | score=1.839542 | 175.3s
+[local] pass 7: 42 → 27 | Δ=0.004357 | score=1.843898 | 173.4s
+[local] pass 8: 35 → 51 | Δ=0.005983 | score=1.849881 | 177.6s
+[local] pass 9: 5 → 52 | Δ=0.012086 | score=1.861968 | 179.3s
+[local] pass 10: no improving swap (best Δ=0). stop.
+[save] wrote D:\NetworkAnalysisOysters\runs\greedy_20251130_012408_sites.csv
+[save] wrote D:\NetworkAnalysisOysters\runs\greedy_20251130_012408_summary.txt
+
+[scripts] greedy + local finished
+  final sites: [4, 6, 10, 15, 19, 20, 21, 24, 27, 30, 31, 32, 36, 37, 38, 39, 40, 41, 47, 49, 51, 52, 53, 55, 60]  
+  final score: 1.861968
+  total time: 1919.7415 secs
+
+
+-------------------- STINGY REALISTIC P0(EXTERNAL) -------------------
+
+[scripts] backward greedy finished
+  sites: [4, 10, 15, 16, 17, 19, 20, 21, 26, 27, 31, 32, 33, 36, 37, 40, 41, 44, 47, 49, 51, 52, 53, 54, 59]       
+  score: 1.819074
+  time taken: 279.0771 secs
+
+
+-------- GREEDY CONSTANT P0(EXTERNAL)  ----------------
+
+[greedy] done. selected 25 sites.
+[save] wrote D:\NetworkAnalysisOysters\runs\greedy_20251129_122948_sites.csv
+[save] wrote D:\NetworkAnalysisOysters\runs\greedy_20251129_122948_summary.txt
+
+[script] finished greedy 25
+[script] sites: [10, 40, 41, 31, 32, 36, 37, 20, 47, 53, 15, 51, 52, 28, 49, 21, 27, 19, 30, 4, 26, 17, 16, 44, 54]  
+[script] final score: 1.846640
+[script] time taken: 255.0471 secs
+
+-------- POST GREEDY SWAP CONSTANT P0(EXTERNAL)  ----------------
+
+[scripts] greedy finished
+  sites: [10, 40, 41, 31, 32, 36, 37, 20, 47, 53, 15, 51, 52, 28, 49, 21, 27, 19, 30, 4, 26, 17, 16, 44, 54]
+  score: 1.846729
+[local] start score = 1.846640 on 25 sites
+[local] pass 1: 4 → 29 | Δ=0.000615 | score=1.847255 | 180.8s
+[local] pass 2: 30 → 59 | Δ=0.008821 | score=1.856076 | 171.8s
+[local] pass 3: 19 → 33 | Δ=0.012081 | score=1.868157 | 181.4s
+[local] pass 4: 27 → 12 | Δ=0.011897 | score=1.880054 | 191.6s
+[local] pass 5: no improving swap (best Δ=0). stop.
+[save] wrote D:\NetworkAnalysisOysters\runs\greedy_20251129_124954_sites.csv
+[save] wrote D:\NetworkAnalysisOysters\runs\greedy_20251129_124954_summary.txt
+
+[scripts] greedy + local finished
+  final sites: [10, 12, 15, 16, 17, 20, 21, 26, 28, 29, 31, 32, 33, 36, 37, 40, 41, 44, 47, 49, 51, 52, 53, 54, 59]  
+  final score: 1.880054
+  total time: 1103.7890 secs
+
+
+------------ STINGY CONSTANT P0(EXTERNAL)  --------------
+
+[scripts] backward greedy finished
+  sites: [10, 12, 15, 16, 17, 20, 21, 26, 28, 29, 31, 32, 33, 36, 37, 40, 41, 44, 47, 49, 51, 52, 53, 54, 59]        
+  score: 1.880054
+  time taken: 262.5717 secs
+
+
+------------- MIQP ------------------------
+
+Gurobi 12.0.3: optimal solution; objective 13692.06835
+340 simplex iterations
+1 branching node
+[miqp] matrix 1
+[miqp] picked: [10, 11, 12, 15, 16, 17, 20, 26, 27, 28, 29, 31, 32, 33, 36, 37, 40, 41, 44, 49, 51, 52, 53, 54, 59]
+[miqp] wrote: D:\NetworkAnalysisOysters\runs\miqp_sites_matrix1.csv
+[miqp] wrote: D:\NetworkAnalysisOysters\runs\miqp_summary_matrix1.txt
+[miqp] time taken: 0.3222 secs
+
+-------------------- MIQP_COMMUNIITES ------------------
+(.venv) (base) PS D:\NetworkAnalysisOysters> python -m scripts.run_miqp_comm      
+Gurobi 12.0.3: optimal solution; objective 12782.90878
+340 simplex iterations
+1 branching node
+absmipgap=1.81899e-12, relmipgap=0
+[comm] matrix 1
+[comm] picked: [10, 12, 15, 16, 21, 26, 27, 28, 29, 31, 32, 33, 37, 40, 41, 42, 44, 47, 48, 49, 51, 52, 53, 54, 59]
+[comm] wrote: D:\NetworkAnalysisOysters\runs\miqp_comm_sites_matrix1.csv
+[comm] wrote: D:\NetworkAnalysisOysters\runs\miqp_comm_summary_matrix1.txt
+
+
+what sites fall into each community the constraint select best 25 keep these constaints in mind
+set C1 :=
+  33
+  36
+  44
+;
+set C2 :=
+  1
+  3
+  4
+  5
+  6
+  16
+  17
+  26
+  28
+  29
+  30
+  35
+  37
+  41
+  48
+;
+set C3 :=
+  7
+  9
+  15
+  24
+  27
+  31
+  32
+  38
+;
+set C4 :=
+  10
+  19
+  20
+  39
+  40
+;
+set C5 :=
+  11
+  12
+  18
+  21
+  42
+  47
+;
+
+
+
+
+----------------------------------- MIQP_SIZING ---------------------------------------
+
+(.venv) (base) PS D:\NetworkAnalysisOysters> python -m scripts.run_miqp_size
+
+Gurobi 12.0.3: optimal solution; objective 58564.18779
+2294 simplex iterations
+1 branching node
+absmipgap=5.15599, relmipgap=8.80399e-05
+[size] matrix 1
+[size] objective (Larvae): 58564.18778743751
+[size] picked: [10, 11, 12, 15, 16, 17, 20, 26, 27, 28, 29, 31, 32, 33, 36, 37, 40, 41, 44, 49, 51, 52, 53, 54, 59]
+[size] wrote: D:\NetworkAnalysisOysters\runs\miqp_size_sites_matrix1.csv
+[size] wrote: D:\NetworkAnalysisOysters\runs\miqp_size_summary_matrix1.txt
+
+
+MIQP with variable reef sizing
+matrix version: 1
+picked 25 sites (x=1)
+  label  10  size=  50.000
+  label  11  size=  50.000
+  label  12  size=  50.000
+  label  15  size=  50.000
+  label  16  size=  50.000
+  label  17  size=  50.000
+  label  20  size=   5.000
+  label  26  size=  50.000
+  label  27  size=  50.000
+  label  28  size=  50.000
+  label  29  size=  50.000
+  label  31  size=  50.000
+  label  32  size=  50.000
+  label  33  size=  50.000
+  label  36  size=   5.343
+  label  37  size=   5.000
+  label  40  size=  40.000
+  label  41  size=  40.000
+  label  44  size=  40.000
+  label  49  size=  14.657
+  label  51  size=  40.000
+  label  52  size=  40.000
+  label  53  size=  40.000
+  label  54  size=  40.000
+  label  59  size=  40.000
+
+
+-------------------------------------- MIQP_COMM_AND_SIZE -------------------------------------
+(.venv) (base) PS D:\NetworkAnalysisOysters> python -m scripts.run_miqp_comm_size --matrix 1
+Gurobi 12.0.3: optimal solution; objective 56442.6273
+4498 simplex iterations
+1 branching node
+absmipgap=2.33295, relmipgap=4.13331e-05
+[comm_size] objective (TotalLarvae): 56442.62729689875
+[comm+size] matrix 1
+[comm+size] picked: [10, 12, 15, 16, 17, 21, 26, 28, 29, 31, 32, 33, 37, 40, 41, 42, 44, 47, 48, 49, 51, 52, 53, 54, 59]
+[comm+size] wrote: D:\NetworkAnalysisOysters\runs\miqp_comm_size_sites_matrix1.csv
+[comm+size] wrote: D:\NetworkAnalysisOysters\runs\miqp_comm_size_summary_matrix1.txt
+MIQP with community minimums + variable reef sizing
+matrix version: 1
+picked 25 sites (x=1)
+  label  10  size=  50.000
+  label  12  size=  50.000
+  label  15  size=  50.000
+  label  16  size=  50.000
+  label  17  size=  50.000
+  label  21  size=  47.116
+  label  26  size=  50.000
+  label  28  size=  50.000
+  label  29  size=  50.000
+  label  31  size=  50.000
+  label  32  size=  50.000
+  label  33  size=  50.000
+  label  37  size=  27.884
+  label  40  size=  40.000
+  label  41  size=  40.000
+  label  42  size=   5.000
+  label  44  size=  40.000
+  label  47  size=   5.000
+  label  48  size=   5.000
+  label  49  size=  40.000
+  label  51  size=  40.000
+  label  52  size=  40.000
+  label  53  size=  40.000
+  label  54  size=  40.000
+  label  59  size=  40.000
+
+
+
+
+
+MATRIX 2:
+
+
+-------------------- GREEDY REALISTIC P0(EXTERNAL) -------------------
+
+[scripts] greedy finished
+  sites: [1, 18, 42, 57, 48, 56, 38, 39, 4, 19, 35, 55, 24, 49, 6, 53, 31, 40, 10, 41, 36, 37, 47, 20, 30]
+  score: 1.781493
+
+
+
+-------------------- POST GREEDY SWAP REALISTIC P0(EXTERNAL) -------------------
+
+[local] start score = 1.781493 on 25 sites
+[local] pass 1: 56 → 21 | Δ=0.008828 | score=1.790321 | 177.3s
+[local] pass 2: 48 → 60 | Δ=0.003136 | score=1.793457 | 177.3s
+[local] pass 3: no improving swap (best Δ=0). stop.
+[save] wrote D:\NetworkAnalysisOysters\runs\greedy_20251130_002649_sites.csv
+[save] wrote D:\NetworkAnalysisOysters\runs\greedy_20251130_002649_summary.txt
+
+[scripts] greedy + local finished
+  final sites: [1, 4, 6, 10, 18, 19, 20, 21, 24, 30, 31, 35, 36, 37, 38, 39, 40, 41, 42, 47, 49, 53, 55, 57, 60]
+  final score: 1.793457
+  total time: 705.4017 secs
+
+
+
+
+-------------------- STINGY REALISTIC P0(EXTERNAL) -------------------
+[save] wrote D:\NetworkAnalysisOysters\runs\backward_sites.csv
+[save] wrote D:\NetworkAnalysisOysters\runs\backward_summary.txt
+
+[scripts] backward greedy finished
+  sites: [4, 6, 7, 10, 15, 16, 19, 20, 21, 24, 26, 27, 30, 31, 32, 36, 37, 40, 41, 44, 47, 49, 51, 52, 53]
+  score: 1.723331
+  time taken: 310.9651 secs
+
+
+
+-------- GREEDY CONSTANT P0(EXTERNAL)  ----------------
+
+[greedy] done. selected 25 sites.
+[save] wrote D:\NetworkAnalysisOysters\runs\greedy_20251129_162114_sites.csv
+[save] wrote D:\NetworkAnalysisOysters\runs\greedy_20251129_162114_summary.txt
+
+[script] finished greedy 25
+[script] sites: [40, 10, 41, 31, 36, 20, 37, 53, 30, 47, 49, 19, 21, 4, 32, 15, 27, 52, 51, 26, 17, 28, 12, 29, 11]
+[script] final score: 1.692871
+[script] time taken: 236.0337 secs
+
+-------- POST GREEDY SWAP CONSTANT P0(EXTERNAL)  ----------------
+
+
+
+[scripts] greedy finished
+  sites: [40, 10, 41, 31, 36, 20, 37, 53, 30, 47, 49, 19, 21, 4, 32, 15, 27, 52, 51, 26, 17, 28, 12, 29, 11]       
+  score: 1.693052
+[local] start score = 1.692871 on 25 sites
+[local] pass 1: 28 → 44 | Δ=0.004610 | score=1.697481 | 158.1s
+[local] pass 2: 27 → 16 | Δ=0.004919 | score=1.702400 | 158.0s
+[local] pass 3: 4 → 59 | Δ=0.016043 | score=1.718443 | 157.1s
+[local] pass 4: 21 → 33 | Δ=0.013770 | score=1.732213 | 157.3s
+[local] pass 5: 30 → 54 | Δ=0.000820 | score=1.733033 | 157.6s
+[local] pass 6: no improving swap (best Δ=0). stop.
+[save] wrote D:\NetworkAnalysisOysters\runs\greedy_20251129_164222_sites.csv
+[save] wrote D:\NetworkAnalysisOysters\runs\greedy_20251129_164222_summary.txt
+
+[scripts] greedy + local finished
+  final sites: [10, 11, 12, 15, 16, 17, 19, 20, 26, 29, 31, 32, 33, 36, 37, 40, 41, 44, 47, 49, 51, 52, 53, 54, 59]
+  final score: 1.733033
+  total time: 1127.1572 secs
+
+------------ STINGY CONSTANT P0(EXTERNAL)  --------------
+
+save] wrote D:\NetworkAnalysisOysters\runs\backward_sites.csv
+[save] wrote D:\NetworkAnalysisOysters\runs\backward_summary.txt
+
+[scripts] backward greedy finished
+  sites: [10, 11, 12, 15, 16, 17, 19, 20, 26, 29, 31, 32, 33, 36, 37, 40, 41, 44, 47, 49, 51, 52, 53, 54, 59]      
+  score: 1.733033
+  time taken: 249.0502 secs
+
+
+------------- MIQP ------------------------
+
+(.venv) (base) PS D:\NetworkAnalysisOysters> python -m scripts.run_miqp
+Gurobi 12.0.3: optimal solution; objective 15806.73595
+359 simplex iterations
+1 branching node
+[miqp] matrix 1
+[miqp] picked: [10, 11, 12, 15, 16, 17, 20, 26, 27, 28, 29, 31, 32, 33, 36, 37, 40, 41, 44, 49, 51, 52, 53, 54, 59]
+[miqp] wrote: D:\NetworkAnalysisOysters\runs\miqp_sites_matrix1.csv
+[miqp] wrote: D:\NetworkAnalysisOysters\runs\miqp_summary_matrix1.txt
+[miqp] time taken: 0.3238 secs
+
+
+-------------------- MIQP_COMMUNIITES ------------------
+(.venv) (base) PS D:\NetworkAnalysisOysters> python -m scripts.run_miqp_comm
+Gurobi 12.0.3: optimal solution; objective 14587.08729
+401 simplex iterations
+1 branching node
+[comm] matrix 1
+[comm] picked: [10, 11, 12, 15, 16, 17, 21, 27, 28, 29, 31, 32, 33, 36, 37, 40, 41, 42, 47, 48, 49, 51, 52, 53, 59]
+[comm] wrote: D:\NetworkAnalysisOysters\runs\miqp_comm_sites_matrix1.csv
+[comm] wrote: D:\NetworkAnalysisOysters\runs\miqp_comm_summary_matrix1.txt
+
+what sites fall into each community the constraint select best 25 keep these constaints in mind
+set C1 :=
+  33
+  36
+  44
+;
+set C2 :=
+  1
+  3
+  4
+  5
+  6
+  16
+  17
+  26
+  28
+  29
+  30
+  35
+  37
+  41
+  48
+;
+set C3 :=
+  7
+  9
+  15
+  24
+  27
+  31
+  32
+  38
+;
+set C4 :=
+  10
+  19
+  20
+  39
+  40
+;
+set C5 :=
+  11
+  12
+  18
+  21
+  42
+  47
+;
+
+
+
+
+----------------------------------- MIQP_SIZING ---------------------------------------
+
+Gurobi 12.0.3: optimal solution; objective 63607.35603
+1228 simplex iterations
+1 branching node
+absmipgap=2.89081, relmipgap=4.54478e-05
+[size] matrix 1
+[size] picked: [10, 11, 12, 15, 16, 17, 20, 26, 27, 28, 29, 31, 32, 33, 36, 37, 40, 41, 44, 49, 51, 52, 53, 54, 59]
+
+
+MIQP with variable reef sizing
+matrix version: 1
+picked 25 sites (x=1)
+  label  10  size=  50.000
+  label  11  size=  50.000
+  label  12  size=  50.000
+  label  15  size=  50.000
+  label  16  size=  50.000
+  label  17  size=  50.000
+  label  20  size=   5.000
+  label  26  size=  50.000
+  label  27  size=  50.000
+  label  28  size=  50.000
+  label  29  size=  50.000
+  label  31  size=  50.000
+  label  32  size=  50.000
+  label  33  size=  50.000
+  label  36  size=  40.000
+  label  37  size=   5.000
+  label  40  size=  40.000
+  label  41  size=  40.000
+  label  44  size=  40.000
+  label  49  size=  15.000
+  label  51  size=  40.000
+  label  52  size=  40.000
+  label  53  size=  40.000
+  label  54  size=   5.000
+  label  59  size=  40.000
+
+
+
+-------------------------------------- MIQP_COMM_AND_SIZE -------------------------------------
+Gurobi 12.0.3: optimal solution; objective 64447.23069
+1902 simplex iterations
+43 branching nodes
+absmipgap=5.4868, relmipgap=8.51363e-05
+[comm_size] objective (TotalLarvae): 64447.23069156994
+[comm+size] matrix 2
+[comm+size] picked: [10, 11, 12, 15, 16, 21, 26, 27, 28, 29, 31, 32, 33, 36, 37, 40, 41, 42, 47, 48, 49, 51, 52, 53, 59]
+
+MIQP with community minimums + variable reef sizing
+matrix version: 2
+picked 25 sites (x=1)
+  label  10  size=  50.000
+  label  11  size=  50.000
+  label  12  size=  50.000
+  label  15  size=  50.000
+  label  16  size=  50.000
+  label  21  size=  24.385
+  label  26  size=  50.000
+  label  27  size=  50.000
+  label  28  size=  50.000
+  label  29  size=  50.000
+  label  31  size=  50.000
+  label  32  size=  50.000
+  label  33  size=  50.000
+  label  36  size=  40.000
+  label  37  size=  40.000
+  label  40  size=  40.000
+  label  41  size=  40.000
+  label  42  size=   5.000
+  label  47  size=   5.615
+  label  48  size=   5.000
+  label  49  size=  40.000
+  label  51  size=  40.000
+  label  52  size=  40.000
+  label  53  size=  40.000
+  label  59  size=  40.000
+
+
+---------NETWORK ANALYSIS--------
+
+(.venv) (base) PS D:\NetworkAnalysisOysters> python -m scripts.network_core_analysis --matrix 1
+================================================================================
+NETWORK ANALYSIS ON CORE SITES (matrix 1)
+================================================================================
+
+Top 10 core sites (by avg_rank across metrics):
+    site_id  in_strength  out_strength  betweenness  eigenvector  pagerank  avg_rank
+31       40    292701.36     218021.73     0.054078     0.630379  0.093591       4.8
+24       32    198441.50     226986.82     0.096631     0.111912  0.027320       6.0
+7        10    359473.68     214956.62     0.026596     0.597413  0.099980       7.0
+23       31    173926.47     144740.25     0.054521     0.297507  0.058402       7.8
+32       41    166988.23     193584.24     0.030585     0.287741  0.045636      10.0
+41       53     93500.41     123634.88     0.084220     0.046566  0.027015      11.2
+27       36     85059.94      60221.64     0.072252     0.121229  0.034428      12.4
+40       52     93545.24     153533.57     0.056294     0.007797  0.013781      15.8
+10       15    194082.24     179546.51     0.009752     0.020628  0.017495      16.4
+37       49     79622.90      95581.83     0.038121     0.017420  0.023716      16.6
+
+----------- core-23 metrics MATRIX 1 ----------
+site_id,in_strength,out_strength,betweenness,eigenvector,pagerank,rank_in_strength,rank_out_strength,rank_betweenness,rank_eigenvector,rank_pagerank,avg_rank
+40,292701.36,218021.73,0.054078014184397165,0.6303793468914147,0.09359138479752942,2.0,4.0,15.0,1.0,2.0,4.8
+32,198441.5,226986.82,0.09663120567375887,0.11191154897453283,0.02732011087435267,5.0,3.0,4.0,7.0,11.0,6.0
+10,359473.68,214956.62,0.026595744680851064,0.5974125192152634,0.09997983317295313,1.0,5.0,26.0,2.0,1.0,7.0
+31,173926.47,144740.25,0.054521276595744676,0.2975066313418887,0.058401916218543064,9.0,10.0,14.0,3.0,3.0,7.8
+41,166988.23,193584.24,0.030585106382978722,0.2877406037518507,0.04563568653206639,10.0,6.0,23.0,4.0,7.0,10.0
+53,93500.41,123634.88,0.08421985815602837,0.04656612622677042,0.02701479042620305,14.0,13.0,6.0,11.0,12.0,11.2
+36,85059.94,60221.64,0.07225177304964539,0.12122859969500477,0.03442792699702762,16.0,21.0,9.0,6.0,10.0,12.4
+52,93545.24,153533.57,0.05629432624113475,0.007796645817039788,0.013781168865415267,13.0,8.0,13.0,20.0,25.0,15.8
+15,194082.24,179546.51,0.00975177304964539,0.020627784675687665,0.017494821903323708,6.0,7.0,38.0,14.0,17.0,16.4
+49,79622.9,95581.83,0.038120567375886524,0.017420462674812256,0.023716019007476434,17.0,18.0,19.0,16.0,13.0,16.6
+37,120415.87,20909.28,0.016843971631205674,0.14534901323978833,0.04806310546374305,11.0,30.0,33.0,5.0,6.0,17.0
+47,115383.08,47967.71,0.007978723404255319,0.10453780876920249,0.05558598324645976,12.0,22.0,40.0,8.0,4.0,17.2
+51,235252.19,132850.36,0.0,0.014951561226509558,0.016843345656804766,4.0,12.0,46.0,17.0,19.0,19.6
+20,69964.29,41264.659999999996,0.007978723404255319,0.0830452999075097,0.0347272662512934,18.0,25.0,40.0,9.0,9.0,20.2
+44,58363.380000000005,119667.68000000001,0.04654255319148936,0.005470509092471462,0.008973780225940593,21.0,14.0,17.0,22.0,30.0,20.8
+26,42648.78,119161.35,0.028368794326241134,0.008564229929297671,0.009576490668124717,26.0,15.0,25.0,19.0,29.0,22.8
+29,45917.659999999996,230261.05,0.03590425531914893,0.0014532850408913779,0.0076211301574900196,24.0,2.0,20.0,34.0,34.0,22.8
+16,175195.0,47946.0,0.004432624113475177,0.006108202897385661,0.015500576102594574,8.0,23.0,43.0,21.0,22.0,23.4
+12,183583.44999999998,2282.72,0.01950354609929078,0.005442236465123614,0.017307939621844348,7.0,48.0,29.0,23.0,18.0,25.0
+59,252742.43,9716.51,0.015070921985815602,0.003590286474938741,0.015557681028363789,3.0,38.0,36.0,28.0,21.0,25.2
+17,67572.23,79540.28,0.008865248226950354,0.004466176735953287,0.008671629859261627,19.0,19.0,39.0,24.0,32.0,26.6
+33,47159.66,237262.62999999998,0.0,0.001352065090853497,0.006700011598359241,23.0,1.0,46.0,35.0,36.0,28.2
+54,56612.78,107764.23999999999,0.0,0.003993452300892349,0.008174115016059223,22.0,16.0,46.0,26.0,33.0,28.6
+
+(.venv) (base) PS D:\NetworkAnalysisOysters> python -m scripts.network_core_analysis --matrix 2
+================================================================================
+NETWORK ANALYSIS ON CORE SITES (matrix 2)
+================================================================================
+
+
+Top 10 core sites (by avg_rank across metrics):
+    site_id  in_strength  out_strength  betweenness  eigenvector  pagerank  avg_rank
+23       31    195231.51     179625.83     0.040780     0.309197  0.074975       8.8
+31       40    423838.16     115053.72     0.036348     0.691329  0.157434       9.2
+7        10    541263.53      90108.70     0.035461     0.588926  0.131139      10.2
+37       49    130851.54     155422.47     0.091755     0.017785  0.020045      10.4
+27       36    119621.74     163586.46     0.039450     0.113263  0.034596      12.2
+32       41    161621.57     234274.63     0.001330     0.213976  0.047738      12.8
+28       37    120276.95      37212.60     0.075798     0.103079  0.032286      13.0
+41       53     87729.34     196022.54     0.047207     0.018269  0.014380      13.2
+24       32    224565.50     162871.68     0.018617     0.028966  0.014398      15.0
+10       15    159498.57     156282.29     0.033688     0.009447  0.011529      17.2
+
+
+----------- core-23 metrics  MATRIX 2----------
+site_id,in_strength,out_strength,betweenness,eigenvector,pagerank,rank_in_strength,rank_out_strength,rank_betweenness,rank_eigenvector,rank_pagerank,avg_rank
+31,195231.51,179625.83000000002,0.04078014184397163,0.3091971486597635,0.07497515739976413,8.0,9.0,21.0,3.0,3.0,8.8
+40,423838.16,115053.72,0.03634751773049645,0.6913293034419121,0.15743422627091325,2.0,17.0,25.0,1.0,1.0,9.2
+10,541263.53,90108.7,0.035460992907801414,0.5889255637264916,0.13113895265004447,1.0,20.0,26.0,2.0,2.0,10.2
+49,130851.54,155422.47,0.09175531914893617,0.017784544892727277,0.02004468318756817,11.0,13.0,2.0,13.0,13.0,10.4
+36,119621.74,163586.46,0.03945035460992908,0.11326297424476507,0.03459586120036552,14.0,10.0,23.0,5.0,9.0,12.2
+41,161621.57,234274.63,0.0013297872340425532,0.21397632047956783,0.04773838406479093,9.0,3.0,43.0,4.0,5.0,12.8
+37,120276.95,37212.6,0.07579787234042552,0.10307937065737637,0.03228567295353129,13.0,31.0,5.0,6.0,10.0,13.0
+53,87729.34,196022.54,0.04720744680851064,0.018269437405773453,0.01437976657572792,15.0,7.0,16.0,12.0,16.0,13.2
+32,224565.5,162871.68,0.018617021276595744,0.02896579557382981,0.014397683267411962,5.0,11.0,34.0,10.0,15.0,15.0
+15,159498.57,156282.28999999998,0.03368794326241135,0.009446887137258077,0.01152880396415946,10.0,12.0,27.0,16.0,21.0,17.2
+12,387610.62,329.85,0.057624113475177305,0.005886060676939532,0.0394506092390712,4.0,48.0,11.0,18.0,8.0,17.8
+20,64872.79,90331.29,0.02171985815602837,0.048409655455923066,0.01796176938142005,17.0,19.0,32.0,8.0,14.0,18.0
+47,83386.47,56819.07,0.022163120567375887,0.057445635816498135,0.022458317216058808,16.0,26.0,31.0,7.0,11.0,18.2
+52,126677.43,195352.13999999998,0.009308510638297872,0.004169429096900426,0.008901609322232516,12.0,8.0,38.0,21.0,28.0,21.4
+51,214963.47,30582.14,0.008421985815602837,0.008225451478579088,0.010378327521498459,6.0,33.0,39.0,17.0,25.0,24.0
+26,23975.73,144993.53,0.04299645390070922,0.0022887446673625586,0.00535782010612321,30.0,14.0,18.0,29.0,33.0,24.8
+16,59613.54,224505.47,0.0035460992907801418,0.0016192415067831463,0.005655508828204226,18.0,4.0,42.0,31.0,31.0,25.2
+29,47088.36,298186.02999999997,0.020390070921985814,0.0006841152767135415,0.004849929017202606,20.0,2.0,33.0,37.0,37.0,25.8
+59,408206.24,300.33,0.0,0.0035788029145978778,0.01123348631152245,3.0,49.0,46.0,25.0,22.0,29.0
+17,36860.8,125574.75,0.0013297872340425532,0.0016658038909259075,0.005056154611885531,26.0,15.0,43.0,30.0,34.0,29.6
+33,35221.15,309441.95,0.004875886524822695,0.0004359302516340308,0.004403820326844023,27.0,1.0,41.0,40.0,39.0,29.6
+54,29335.239999999998,98355.05,0.0062056737588652485,0.0010698501423966398,0.004951200489772044,29.0,18.0,40.0,34.0,35.0,31.2
+44,29371.85,117101.99,0.0,0.0014215016284502993,0.004949796030343509,28.0,16.0,46.0,33.0,36.0,31.8
+
+
+

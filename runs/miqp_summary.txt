@@ -1,5 +1,6 @@
 Plain MIQP (no communities, no sizing)
 picked 25 sites
+time taken: 0.6700 secs
   label  10
   label  11
   label  12

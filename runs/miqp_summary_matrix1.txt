@@ -1,0 +1,29 @@
+Plain MIQP (no communities, no sizing)
+matrix version: 1
+picked 25 sites
+time taken: 0.3238 secs
+  label  10
+  label  11
+  label  12
+  label  15
+  label  16
+  label  17
+  label  20
+  label  26
+  label  27
+  label  28
+  label  29
+  label  31
+  label  32
+  label  33
+  label  36
+  label  37
+  label  40
+  label  41
+  label  44
+  label  49
+  label  51
+  label  52
+  label  53
+  label  54
+  label  59

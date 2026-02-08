@@ -11,7 +11,7 @@ def backward_greedy(
     k: int = 25,
     tmax: int = 1000,
     P1scaling: float = 0.5,
-    P0_mode: str = "constant",
+    P0_mode: str = "realistic",
     consP0: float = 170.0,
     save: bool = False,
     save_name: str | None = None,

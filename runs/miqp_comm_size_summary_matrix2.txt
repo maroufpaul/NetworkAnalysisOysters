@@ -1,0 +1,28 @@
+MIQP with community minimums + variable reef sizing
+matrix version: 2
+picked 25 sites (x=1)
+  label  10  size=  50.000
+  label  11  size=  50.000
+  label  12  size=  50.000
+  label  15  size=  50.000
+  label  16  size=  50.000
+  label  21  size=  24.385
+  label  26  size=  50.000
+  label  27  size=  50.000
+  label  28  size=  50.000
+  label  29  size=  50.000
+  label  31  size=  50.000
+  label  32  size=  50.000
+  label  33  size=  50.000
+  label  36  size=  40.000
+  label  37  size=  40.000
+  label  40  size=  40.000
+  label  41  size=  40.000
+  label  42  size=   5.000
+  label  47  size=   5.615
+  label  48  size=   5.000
+  label  49  size=  40.000
+  label  51  size=  40.000
+  label  52  size=  40.000
+  label  53  size=  40.000
+  label  59  size=  40.000

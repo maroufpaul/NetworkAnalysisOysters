@@ -132,7 +132,7 @@ Heuristic and metaheuristic algorithms serve as dynamic approximations to the MI
 
 | Algorithm | Method | Purpose |
 |------------|---------|----------|
-| Greedy Forward | Adds sites incrementally based on marginal gain | Fast but myopic |
+| Greedy Forward | Adds sites incrementally based on marginal gain | Myopic/ ode takes time|
 | 1-Swap Hill Climb | Local improvement of Greedy solution | Enhances optimality |
 | Stingy Backward | Removes least valuable sites until K remain | Validates local optimum |
 | MIQP (AMPL) | Exact quadratic optimization | Global benchmark |

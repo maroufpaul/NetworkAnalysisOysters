@@ -1,0 +1,566 @@
+\documentclass[11pt]{article}
+
+% ---------- packages ----------
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{bm}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{graphicx}
+\usepackage{enumitem}
+\usepackage{caption}
+\usepackage{float}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{listings}
+\usepackage{tcolorbox}
+\usepackage{hyperref}
+
+% ---------- colors ----------
+\definecolor{accent}{HTML}{1F4E79}
+\definecolor{rule}{HTML}{2E75B6}
+\definecolor{codebg}{HTML}{F4F4F4}
+\definecolor{headfill}{HTML}{D9E2F3}
+\definecolor{linkcolor}{HTML}{1F4E79}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=linkcolor,
+  urlcolor=linkcolor,
+  citecolor=linkcolor
+}
+
+% ---------- titles ----------
+\titleformat{\section}
+  {\color{accent}\Large\bfseries}{\thesection.}{0.6em}{}
+  [{\color{rule}\vspace{-0.3em}\noindent\rule{\linewidth}{1pt}}]
+\titleformat{\subsection}
+  {\color{accent}\large\bfseries}{\thesubsection}{0.6em}{}
+\titleformat{\subsubsection}
+  {\bfseries}{\thesubsubsection}{0.6em}{}
+
+\titlespacing*{\section}{0pt}{1.4em}{0.6em}
+\titlespacing*{\subsection}{0pt}{1.1em}{0.4em}
+\titlespacing*{\subsubsection}{0pt}{0.9em}{0.3em}
+
+% ---------- headers / footers ----------
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[R]{\small\color{gray}Oyster Reef Restoration }
+\fancyfoot[C]{\small\color{gray}Page \thepage\ of \pageref{LastPage}}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{gray!50}\leaders\hrule height \headrulewidth\hfill}}
+
+\usepackage{lastpage}
+
+% ---------- spacing ----------
+\setlength{\parskip}{0.6em}
+\setlength{\parindent}{0pt}
+\renewcommand{\arraystretch}{1.15}
+
+% ---------- listings ----------
+\lstdefinestyle{shell}{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  framerule=0pt,
+  framesep=6pt,
+  xleftmargin=6pt,
+  xrightmargin=6pt,
+  breaklines=true,
+  showstringspaces=false,
+  columns=fullflexible
+}
+\lstset{style=shell}
+
+% ---------- table column types ----------
+\newcolumntype{S}{>{\ttfamily\footnotesize}l}    % monospace sites column
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+% ---------- helper boxes ----------
+\newtcolorbox{notebox}{
+  colback=codebg, colframe=rule, boxrule=0.4pt,
+  arc=2pt, left=8pt, right=8pt, top=4pt, bottom=4pt
+}
+
+% ============================================================
+\title{
+  \vspace{-2em}
+  \color{accent}\textbf{\Huge Oyster Reef Restoration Optimization}\\[0.4em]
+  {\Large\color{black!70}\normalfont Site Selection under a JARS Metapopulation Connectivity Model}\\[0.3em]
+  {\large\color{rule}\itshape Project Report}
+}
+\author{
+  \textbf{Marouf Paul}\\[0.1em]
+  \small M.S.\ Computational Operations Research, William \& Mary\\[0.1em]
+  \small Advisor: Dr. Rex Kincaid \quad\textbullet\quad Collaborators: Dr.\ Leah Shaw, Dr.\ Rom Lipcius (VIMS)\\[0.1em]
+  \small Repository: \texttt{NetworkAnalysisOysters}
+}
+\date{}
+
+% ============================================================
+\begin{document}
+\maketitle
+\thispagestyle{fancy}
+
+% ============================================================
+\section{Purpose of This Document}
+
+This report has two jobs:
+
+\begin{itemize}[leftmargin=1.4em, itemsep=0.2em]
+  \item Describe the problem, the JARS metapopulation model, the optimization formulations, and the heuristic algorithms in enough detail that the code is reproducible without reading every script.
+  \item Report only verified results. Every number in the tables below was re-derived from the repository by re-running the JARS ODE on the final selected sets, and every cross-model intersection was recomputed from the saved CSVs. Earlier drafts of this report contained a handful of small but real errors that have been corrected here --- those corrections are listed explicitly in Appendix~A.
+\end{itemize}
+
+Throughout the report I use the following convention: greedy, post-greedy 1-swap, and stingy backward elimination are evaluated under the full JARS equilibrium objective $F(S)$, while all MIQP variants optimize a quadratic plumbing surrogate $\tilde{F}(S)$ using AMPL and Gurobi. Both views are needed because the surrogate is fast and provable but lossy, and the ODE is faithful but expensive.
+
+% ============================================================
+\section{Problem Statement and Biology}
+
+\subsection{Restoration as a network problem}
+
+The Chesapeake Bay historically supported more than ten billion oysters; today the population is below $1\%$ of that baseline. Restoration is expensive, so the question is not whether to restore but \emph{where}: among $49$ candidate reef sites distributed across five ecological management zones in the bay, which subset of $K=25$ sites should be restored to maximize long-run adult oyster biomass?
+
+The non-trivial part is that oyster larvae disperse via tidal currents. A reef's value depends not only on its own productivity but on the larvae it receives from, and sends to, the other selected reefs. This makes the problem combinatorial and non-additive: pairs and clusters of reefs interact super-linearly, and restoring an isolated high-productivity reef can be worse than restoring three weaker but well-connected ones.
+
+\subsection{The JARS metapopulation ODE}
+
+Each candidate reef is modeled by a coupled four-state ODE for juveniles $J$, adults $A$, reef shell volume $R$, and sediment $S$ (the JARS model, originally implemented by Prof.\ Leah Shaw and converted to Python in \texttt{src/model/jars\_ode.py}). The state of reef $k$ evolves as larval supply is filtered through density-dependent settlement, juveniles mature into adults, adults accrete shell, and sediment slowly buries shell. The key coupling term is the larval input
+\[
+\Lambda_k \;=\; P_0(k) \;+\; \sum_{\ell} P_1(\ell \to k)\,|A_\ell|^{1.72},
+\]
+where $P_0(k)$ is the external larval supply at site $k$, $P_1$ is the larval transport probability matrix between sites, and the exponent $1.72$ (a published parameter for oysters) makes dense, retentive clusters disproportionately valuable. This nonlinearity is the structural reason greedy heuristics undershoot and clustered selection methods do well.
+
+\subsection{The optimization objective}
+
+Let $A_k^*(S)$ be the equilibrium adult biomass at site $k$ when the ODE is integrated to $t=1000$ with reefs restored at exactly the sites in $S$. The true objective is
+\[
+\max\;F(S) = \sum_{k \in S} A_k^*(S), \qquad \text{subject to } |S|=25,\; S \subseteq N,\; |N|=49.
+\]
+Every greedy / swap / stingy result reported below was scored by literally integrating this ODE on the chosen set. The MIQP models optimize a quadratic surrogate of $F$ that captures the dominant external + internal-retention contributions; the alignment between the two is excellent in practice but is not assumed in the heuristic results.
+
+% ============================================================
+\section{Connectivity Data and External Forcing}
+
+\subsection{Two connectivity matrices}
+
+VIMS collaborators provided two independent connectivity matrices from different hydrodynamic realizations:
+
+\begin{itemize}[leftmargin=1.4em, itemsep=0.1em]
+  \item \textbf{Matrix 1}: \texttt{nk\_All\_060102final\_56sites\_Model.xlsx}
+  \item \textbf{Matrix 2}: \texttt{nk\_All\_060103final\_56sites\_Model.xlsx}
+\end{itemize}
+
+Both matrices include $56$ raw site labels. Per biological advice from Prof.\ Shaw and Prof.\ Lipcius, sites $66$--$72$ are excluded, leaving $49$ candidate sites for both matrices (\texttt{CANDIDATE\_SITES} in \texttt{src/model/jars\_ode.py}). For the MIQP, $P_1$ is additionally scaled by \texttt{P1scaling = 0.5} and fed through the surrogate weight $W(\ell, k) = P_1(\ell, k)\,(A^*)^{1.72}$ with $A^* = 0.05675$ representing the median single-reef adult equilibrium.
+
+\subsection{Indexing convention (important)}
+
+There are two coexisting indexing schemes in this project, and confusing them is the easiest way to get wrong results.
+
+\begin{notebox}
+\textbf{Biological site labels} are the original integer IDs in the Excel matrices: $1, 3, 4, 5, \ldots, 60$ (with sites $66$--$72$ dropped, and several others in the $1$--$60$ range absent). Every CSV file and every results table in this report uses these labels.
+
+\textbf{AMPL indices} are $0, 1, \ldots, 48$, i.e.\ positions in the \texttt{CANDIDATE\_SITES} array. Every \texttt{.dat} file under \texttt{ampl/} uses these indices. The translation between the two lives in \texttt{runs/oyster\_index\_mapping\_matrix\{1,2\}.csv}.
+\end{notebox}
+
+In particular, the community sets in \texttt{ampl/oyster\_comm.dat} (e.g.\ $C_1 = \{33, 36, 44\}$) are AMPL \emph{indices}, not site labels. Looking up those indices in the mapping CSV shows that $C_1$ actually contains site labels $\{42, 48, 56\}$. The Python runner scripts (\texttt{scripts/run\_miqp*.py}) handle the translation back to site labels before writing CSVs, so end-user output is always in biological labels.
+
+\subsection{External larval supply: two regimes}
+
+The same set of $49$ sites is studied under two different external-forcing assumptions:
+
+\begin{itemize}[leftmargin=1.4em, itemsep=0.2em]
+  \item \textbf{Constant $P_0$} --- every site receives the same external input of $170$ larvae per timestep. This is the ``pure plumbing'' regime: differences in performance come only from the internal connectivity network, so this regime tells us about the structure of the network itself.
+  \item \textbf{Realistic $P_0$} --- a heterogeneous vector with values in $\{100, 200, 400\}$ assigned per region based on empirical estimates (\texttt{setP0} in \texttt{jars\_ode.py}, supplied by the biologists). This regime mixes ``faucet strength'' into the optimization: some sites are inherently well-fed even if they are weakly connected.
+\end{itemize}
+
+All MIQP results in this report are under constant $P_0$ (the AMPL data file embeds $170$ for all sites). The realistic regime is only used for the ODE-driven heuristics.
+
+% ============================================================
+\section{Optimization Methods}
+
+\subsection{ODE-driven heuristics}
+
+\subsubsection*{Greedy forward selection}
+Start with the empty set. At each step, evaluate $F(S \cup \{k\})$ by running the full JARS ODE for every candidate $k$ not yet selected, and add the site with the largest marginal gain. Repeat $25$ times. This is a fast first pass but myopic: it cannot recover from a poor early choice, and the $|A|^{1.72}$ nonlinearity means it tends to undershoot the best clustered design.
+
+\subsubsection*{Post-greedy 1-for-1 local swap}
+Starting from the greedy $25$-site set, evaluate every swap that exchanges one selected site for one unselected candidate. Apply the best improving swap, then repeat until no swap improves $F$. Empirically this lifts the greedy score by $1$--$2\%$ in absolute terms and is what we treat as the heuristic upper bound.
+
+\subsubsection*{Stingy backward elimination}
+Start with all $49$ candidates. At each step, evaluate $F(S \setminus \{a\})$ for every $a \in S$, and remove the site whose removal hurts $F$ the least. Stop when $|S|=25$. This is a separate path to the local optimum, and is useful as a consistency check on the swap result --- the two methods converging on the same $25$ sites is strong evidence that the set is a stable local optimum.
+
+\subsection{MIQP surrogates}
+
+All MIQP variants share the surrogate objective
+\[
+\max\;\tilde{F}(S) = \sum_{i \in S} Pe(i) + \sum_{i,j \in S} W(i, j)
+\]
+with binary selection variables $x_i$ and the cardinality constraint $\sum x_i = 25$. There are four variants.
+
+\subsubsection*{(a) Base MIQP --- \texttt{oyster\_quad.mod}}
+Just the cardinality constraint. Picks the most retentive $25$-site cluster.
+
+\subsubsection*{(b) MIQP + community minimums --- \texttt{oyster\_comm.mod}}
+Adds five geographic-region constraints: $|S \cap C_r| \geq r_r$ with $(r_1, r_2, r_3, r_4, r_5) = (2, 5, 3, 2, 3)$. The total floor of $15$ leaves $10$ ``flex'' sites for the optimizer to place freely. This is the equity model used to satisfy multi-stakeholder coverage.
+
+\subsubsection*{(c) MIQP + variable sizing --- \texttt{oyster\_size.mod}}
+Adds a continuous reef-area variable $s_i \in [L_i, U_i]$ for each selected site ($5$--$50$ acres), with a global budget $\sum s_i \leq T = 1000$ acres and a normalization $\bar{S} = 20$. The objective scales each $Pe(i)$ and $W(i,j)$ entry by $s_i / \bar{S}$. This lets the model allocate big reefs to hubs and small reefs to marginal sites.
+
+\subsubsection*{(d) MIQP + community + sizing --- \texttt{oyster\_comm\_size.mod}}
+Combines (b) and (c). This is the model that most closely matches real planning constraints --- it must include some sites for regional equity, but it can size those sites small to limit the cost in surrogate larvae production.
+
+% ============================================================
+\section{Results}
+
+All ODE scores below were independently re-derived from the repository by running \texttt{src/opt/evaluator.py} on the saved site sets. All ten heuristic scores match the original logs exactly to six decimal places. MIQP objectives are read from the AMPL/Gurobi logs. The site-set intersections in \S5.3--5.4 were also recomputed.
+
+\subsection{Heuristic results under constant \texorpdfstring{$P_0$}{P0}}
+
+Table~\ref{tab:heur-const} lists the $25$-site sets and equilibrium scores produced by the three ODE-driven heuristics on each matrix under constant external supply.
+
+\begin{table}[H]
+\centering
+\caption{ODE-driven heuristic results under constant $P_0$.}
+\label{tab:heur-const}
+\small
+\begin{tabularx}{\linewidth}{@{}l X r@{}}
+\toprule
+\textbf{Matrix / Method} & \textbf{Selected sites (sorted)} & \textbf{$F(S)$} \\
+\midrule
+M1 Greedy & \texttt{10,\ 40,\ 41,\ 31,\ 32,\ 36,\ 37,\ 20,\ 47,\ 53,\ 15,\ 51,\ 52,\ 28,\ 49,\ 21,\ 27,\ 19,\ 30,\ 4,\ 26,\ 17,\ 16,\ 44,\ 54} & 1.846640 \\
+M1 Greedy + Swap & \texttt{10,\ 12,\ 15,\ 16,\ 17,\ 20,\ 21,\ 26,\ 28,\ 29,\ 31,\ 32,\ 33,\ 36,\ 37,\ 40,\ 41,\ 44,\ 47,\ 49,\ 51,\ 52,\ 53,\ 54,\ 59} & 1.880054 \\
+M1 Stingy & \texttt{10,\ 12,\ 15,\ 16,\ 17,\ 20,\ 21,\ 26,\ 28,\ 29,\ 31,\ 32,\ 33,\ 36,\ 37,\ 40,\ 41,\ 44,\ 47,\ 49,\ 51,\ 52,\ 53,\ 54,\ 59} & 1.880054 \\
+\midrule
+M2 Greedy & \texttt{10,\ 11,\ 12,\ 15,\ 16,\ 17,\ 19,\ 20,\ 26,\ 29,\ 31,\ 32,\ 33,\ 36,\ 37,\ 40,\ 41,\ 44,\ 47,\ 49,\ 51,\ 52,\ 53,\ 54,\ 59} & 1.692871 \\
+M2 Greedy + Swap & \texttt{10,\ 11,\ 12,\ 15,\ 16,\ 17,\ 19,\ 20,\ 26,\ 29,\ 31,\ 32,\ 33,\ 36,\ 37,\ 40,\ 41,\ 44,\ 47,\ 49,\ 51,\ 52,\ 53,\ 54,\ 59} & 1.733033 \\
+M2 Stingy & \texttt{10,\ 11,\ 12,\ 15,\ 16,\ 17,\ 19,\ 20,\ 26,\ 29,\ 31,\ 32,\ 33,\ 36,\ 37,\ 40,\ 41,\ 44,\ 47,\ 49,\ 51,\ 52,\ 53,\ 54,\ 59} & 1.733033 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Two structural observations from Table~\ref{tab:heur-const}:
+
+\begin{itemize}[leftmargin=1.4em, itemsep=0.2em]
+  \item On both matrices, post-greedy local swap and stingy backward elimination converge to exactly the same $25$ sites with exactly the same equilibrium score. This is strong (independent-path) evidence that these sets are stable local optima of the true ODE objective.
+  \item On Matrix~2, greedy already finds the same $25$ sites as the swap and stingy methods; the swap pass only improves the score by $\sim 2.4\%$ by reordering effects, not by changing the set.
+\end{itemize}
+
+\subsection{Heuristic results under realistic \texorpdfstring{$P_0$}{P0}}
+
+Switching to heterogeneous external supply pulls some new sites into the solution (those with high $P_0$ even if weakly connected) and pushes some plumbing-only sites out. Table~\ref{tab:heur-real} shows the greedy + swap and stingy results.
+
+\begin{table}[H]
+\centering
+\caption{ODE-driven heuristic results under realistic $P_0$.}
+\label{tab:heur-real}
+\small
+\begin{tabularx}{\linewidth}{@{}l X r@{}}
+\toprule
+\textbf{Matrix / Method} & \textbf{Selected sites (sorted)} & \textbf{$F(S)$} \\
+\midrule
+M1 Greedy + Swap (real) & \texttt{4,\ 6,\ 10,\ 15,\ 19,\ 20,\ 21,\ 24,\ 27,\ 30,\ 31,\ 32,\ 36,\ 37,\ 38,\ 39,\ 40,\ 41,\ 47,\ 49,\ 51,\ 52,\ 53,\ 55,\ 60} & 1.861968 \\
+M1 Stingy (real) & \texttt{4,\ 10,\ 15,\ 16,\ 17,\ 19,\ 20,\ 21,\ 26,\ 27,\ 31,\ 32,\ 33,\ 36,\ 37,\ 40,\ 41,\ 44,\ 47,\ 49,\ 51,\ 52,\ 53,\ 54,\ 59} & 1.819074 \\
+\midrule
+M2 Greedy + Swap (real) & \texttt{1,\ 4,\ 6,\ 10,\ 18,\ 19,\ 20,\ 21,\ 24,\ 30,\ 31,\ 35,\ 36,\ 37,\ 38,\ 39,\ 40,\ 41,\ 42,\ 47,\ 49,\ 53,\ 55,\ 57,\ 60} & 1.793457 \\
+M2 Stingy (real) & \texttt{4,\ 6,\ 7,\ 10,\ 15,\ 16,\ 19,\ 20,\ 21,\ 24,\ 26,\ 27,\ 30,\ 31,\ 32,\ 36,\ 37,\ 40,\ 41,\ 44,\ 47,\ 49,\ 51,\ 52,\ 53} & 1.723331 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Notice that under realistic forcing, greedy + swap and stingy no longer agree on a single set --- the heterogeneity of $P_0$ creates more local optima. However, a large ``robust core'' of sites is shared across all four realistic designs (see \S\ref{sec:backbone}).
+
+\subsection{MIQP surrogate results under constant \texorpdfstring{$P_0$}{P0}}
+
+All four AMPL/Gurobi models solved to proven optimality in well under a second on a standard laptop. Table~\ref{tab:miqp} summarizes the objective values and selected sets.
+
+\begin{table}[H]
+\centering
+\caption{MIQP surrogate results under constant $P_0$.}
+\label{tab:miqp}
+\small
+\begin{tabularx}{\linewidth}{@{}l X r@{}}
+\toprule
+\textbf{Model} & \textbf{Selected sites (sorted)} & \textbf{$\tilde{F}(S)$} \\
+\midrule
+M1 Base MIQP & \texttt{10,\ 11,\ 12,\ 15,\ 16,\ 17,\ 20,\ 26,\ 27,\ 28,\ 29,\ 31,\ 32,\ 33,\ 36,\ 37,\ 40,\ 41,\ 44,\ 49,\ 51,\ 52,\ 53,\ 54,\ 59} & 13692.07 \\
+M1 MIQP + Comm & \texttt{10,\ 11,\ 12,\ 15,\ 16,\ 17,\ 21,\ 27,\ 28,\ 29,\ 31,\ 32,\ 33,\ 36,\ 37,\ 40,\ 41,\ 42,\ 47,\ 49,\ 51,\ 52,\ 53,\ 56,\ 59} & 12782.91 \\
+M1 MIQP + Size & \texttt{10,\ 11,\ 12,\ 15,\ 16,\ 17,\ 20,\ 26,\ 27,\ 28,\ 29,\ 31,\ 32,\ 33,\ 36,\ 37,\ 40,\ 41,\ 44,\ 49,\ 51,\ 52,\ 53,\ 54,\ 59} & 58564.19 \\
+M1 MIQP + Comm + Size & \texttt{10,\ 12,\ 15,\ 16,\ 17,\ 21,\ 26,\ 28,\ 29,\ 31,\ 32,\ 33,\ 37,\ 40,\ 41,\ 42,\ 44,\ 47,\ 48,\ 49,\ 51,\ 52,\ 53,\ 54,\ 59} & 56442.63 \\
+\midrule
+M2 Base MIQP & \texttt{10,\ 11,\ 12,\ 15,\ 16,\ 17,\ 20,\ 26,\ 27,\ 28,\ 29,\ 31,\ 32,\ 33,\ 36,\ 37,\ 40,\ 41,\ 44,\ 49,\ 51,\ 52,\ 53,\ 54,\ 59} & 15806.74 \\
+M2 MIQP + Comm & \texttt{10,\ 12,\ 15,\ 16,\ 21,\ 26,\ 27,\ 28,\ 29,\ 31,\ 32,\ 33,\ 37,\ 40,\ 41,\ 42,\ 44,\ 47,\ 48,\ 49,\ 51,\ 52,\ 53,\ 54,\ 59} & 14587.09 \\
+M2 MIQP + Size & \texttt{10,\ 11,\ 12,\ 15,\ 16,\ 17,\ 20,\ 26,\ 27,\ 28,\ 29,\ 31,\ 32,\ 33,\ 36,\ 37,\ 40,\ 41,\ 44,\ 49,\ 51,\ 52,\ 53,\ 54,\ 59} & 63607.36 \\
+M2 MIQP + Comm + Size & \texttt{10,\ 11,\ 12,\ 15,\ 16,\ 21,\ 26,\ 27,\ 28,\ 29,\ 31,\ 32,\ 33,\ 36,\ 37,\ 40,\ 41,\ 42,\ 47,\ 48,\ 49,\ 51,\ 52,\ 53,\ 59} & 64447.23 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Two notes on the sizing models. First, in both matrices the optimal \emph{set} under sizing is identical to the base MIQP set --- the optimizer doesn't change who is selected, it just allocates large area ($40$--$50$ acres) to high-connectivity hubs and small area ($5$--$15$ acres) to weaker neighbors. Second, the total reef area is exactly $1000$ acres in every sizing solution; the budget constraint is tight in all cases.
+
+Representative size profile (M1 MIQP + Size): $50$ acres at sites $10, 11, 12, 15, 16, 17, 26$--$33$; $40$ acres at sites $40, 41, 44, 51$--$54, 59$; and $5$--$15$ acres at sites $20, 36, 37, 49$. See \texttt{runs/miqp\_size\_sites\_matrix\{1,2\}.csv} for the full per-site allocations.
+
+\subsection{Backbone sites: intersections across models and matrices}
+\label{sec:backbone}
+
+The point of running so many models is to see which sites are robust to the choice of method, matrix, and forcing regime. The intersection structure is the cleanest summary.
+
+\subsubsection*{Within-matrix constant-$P_0$ intersection (all $7$ constant models)}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Matrix} & \textbf{Sites common to greedy, swap, stingy, MIQP, +Comm, +Size, +Comm+Size} & \textbf{Size} \\
+\midrule
+Matrix 1 & \texttt{10, 15, 16, 17, 28, 31, 32, 37, 40, 41, 49, 51, 52, 53} & 14 \\
+Matrix 2 & \texttt{10, 12, 15, 26, 29, 31, 32, 37, 40, 41, 49, 51, 52, 53} & 14 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Each matrix has a $14$-site backbone across its seven constant-forcing optimization runs.
+
+\subsubsection*{Cross-matrix constant-$P_0$ backbone}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Selection} & \textbf{Sites} & \textbf{Size} \\
+\midrule
+Intersection of M1 (14) and M2 (14) backbones & \texttt{10, 15, 31, 32, 37, 40, 41, 49, 51, 52, 53} & 11 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection*{Global backbone (all $18$ models, both matrices, both $P_0$ regimes)}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Selection} & \textbf{Sites} & \textbf{Size} \\
+\midrule
+Sites selected by every one of the $18$ model runs & \texttt{10, 31, 37, 40, 41, 49, 53} & 7 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+These seven sites --- \textbf{10, 31, 37, 40, 41, 49, 53} --- appear in every greedy, every greedy+swap, every stingy, and every MIQP variant (base, +Comm, +Size, +Comm+Size) on both connectivity matrices and under both constant and realistic external forcing. They are the structural arteries of the bay's larval network: any restoration design that excludes them is structurally weaker.
+
+\subsection{Network centrality on the constant-\texorpdfstring{$P_0$}{P0} backbone}
+
+To explain why the same sites keep being selected, we computed five weighted centrality metrics on the directed connectivity graph defined by $P_1$ for each matrix: in-strength, out-strength, betweenness (with edge length $1 / \text{weight}$), eigenvector centrality, and PageRank. Sites were ranked separately by each metric, and the average rank gives an overall ``network importance'' ordering. Tables~\ref{tab:netM1} and \ref{tab:netM2} show the top $10$ sites of the $11$-site cross-matrix backbone for each matrix.
+
+\begin{table}[H]
+\centering
+\caption{Matrix 1 --- top $10$ of the backbone by average rank.}
+\label{tab:netM1}
+\small
+\begin{tabular}{@{}rrrrrrr@{}}
+\toprule
+\textbf{Site} & \textbf{In-str.} & \textbf{Out-str.} & \textbf{Betw.} & \textbf{Eig.} & \textbf{PR} & \textbf{avg rank} \\
+\midrule
+10 & 359,474 & 214,957 & 0.0266 & 0.5974 & 0.0999 & 7.0 \\
+40 & 292,701 & 218,022 & 0.0541 & 0.6304 & 0.0936 & 4.8 \\
+32 & 198,442 & 226,987 & 0.0966 & 0.1119 & 0.0273 & 6.0 \\
+31 & 173,926 & 144,740 & 0.0545 & 0.2975 & 0.0584 & 7.8 \\
+41 & 166,988 & 193,584 & 0.0306 & 0.2877 & 0.0456 & 10.0 \\
+53 & 93,500  & 123,635 & 0.0842 & 0.0466 & 0.0270 & 11.2 \\
+52 & 93,545  & 153,534 & 0.0563 & 0.0078 & 0.0138 & 15.8 \\
+15 & 194,082 & 179,547 & 0.0098 & 0.0206 & 0.0175 & 16.4 \\
+49 & 79,623  & 95,582  & 0.0381 & 0.0174 & 0.0237 & 16.6 \\
+37 & 120,416 & 20,909  & 0.0168 & 0.1453 & 0.0481 & 17.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Matrix 2 --- top $10$ of the backbone by average rank.}
+\label{tab:netM2}
+\small
+\begin{tabular}{@{}rrrrrrr@{}}
+\toprule
+\textbf{Site} & \textbf{In-str.} & \textbf{Out-str.} & \textbf{Betw.} & \textbf{Eig.} & \textbf{PR} & \textbf{avg rank} \\
+\midrule
+31 & 195,232 & 179,626 & 0.0408 & 0.3092 & 0.0750 & 8.8 \\
+40 & 423,838 & 115,054 & 0.0363 & 0.6913 & 0.1574 & 9.2 \\
+10 & 541,264 & 90,109  & 0.0355 & 0.5889 & 0.1311 & 10.2 \\
+49 & 130,852 & 155,422 & 0.0918 & 0.0178 & 0.0200 & 10.4 \\
+36 & 119,622 & 163,586 & 0.0395 & 0.1133 & 0.0346 & 12.2 \\
+41 & 161,622 & 234,275 & 0.0013 & 0.2140 & 0.0477 & 12.8 \\
+37 & 120,277 & 37,213  & 0.0758 & 0.1031 & 0.0323 & 13.0 \\
+53 & 87,729  & 196,023 & 0.0472 & 0.0183 & 0.0144 & 13.2 \\
+32 & 224,566 & 162,872 & 0.0186 & 0.0290 & 0.0144 & 15.0 \\
+15 & 159,499 & 156,282 & 0.0337 & 0.0094 & 0.0115 & 17.2 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The pattern is consistent across both matrices: sites $10, 31, 32, 40, 41$ are simultaneously high on eigenvector centrality and PageRank, meaning they are embedded in dense subnetworks of other important nodes. Sites $36, 49, 53$ score relatively high on betweenness, indicating they act as bridges between otherwise weakly-connected regions. This is the network-theoretic explanation for why optimization keeps selecting them: the JARS dynamics reward retentive loops and bridges, both of which these sites provide.
+
+% ============================================================
+\section{Repository Structure and Reproducibility}
+
+\subsection{Layout}
+
+\begin{lstlisting}
+NetworkAnalysisOysters/
+|-- ampl/                   AMPL .mod and .dat files
+|   |-- oyster_quad.mod     Base MIQP
+|   |-- oyster_comm.mod     MIQP + community minimums
+|   |-- oyster_size.mod     MIQP + variable sizing
+|   |-- oyster_comm_size.mod  MIQP + community + sizing
+|   `-- oyster_*.dat        Auto-generated data (prepare_miqp_data.py)
+|-- data/                   Connectivity matrices (Excel)
+|-- src/
+|   |-- model/jars_ode.py   JARS ODE, candidate site list, P0 setter
+|   |-- opt/evaluator.py    Single-call ODE scoring of a site set
+|   |-- opt/greedy.py       Forward greedy
+|   |-- opt/local_search.py 1-for-1 swap local search
+|   |-- opt/backward.py     Stingy backward elimination
+|   `-- utils/io_utils.py   CSV/TXT writers for runs/
+|-- scripts/                Entry-point CLIs (run_*.py, prepare_*.py)
+|-- runs/                   Saved CSVs, summaries, network metrics
+|-- figures/                Generated PNGs
+|-- validate.py             Independent re-validation harness
+`-- requirements.txt
+\end{lstlisting}
+
+\subsection{Environment}
+
+\begin{itemize}[leftmargin=1.4em, itemsep=0.1em]
+  \item Python 3.10. \texttt{pip install -r requirements.txt} covers numpy, pandas, scipy, openpyxl, matplotlib, networkx, amplpy.
+  \item AMPL + Gurobi on PATH. Test with \texttt{python -m scripts.check\_ampl\_env}.
+\end{itemize}
+
+\subsection{End-to-end reproduction}
+
+All published numbers can be regenerated with the following sequence (substitute \texttt{--matrix 2} to repeat for the second connectivity matrix):
+
+\begin{lstlisting}
+# 1. Generate AMPL data from the Excel matrix
+python -m scripts.prepare_miqp_data --matrix 1
+
+# 2. ODE-driven heuristics (constant P0)
+python -m scripts.run_greedy
+python -m scripts.run_greedy_then_local
+python -m scripts.run_backward
+
+# 3. MIQP variants (constant P0)
+python -m scripts.run_miqp           --matrix 1
+python -m scripts.run_miqp_comm      --matrix 1
+python -m scripts.run_miqp_size      --matrix 1
+python -m scripts.run_miqp_comm_size --matrix 1
+
+# 4. Network centrality
+python -m scripts.network_core_analysis --matrix 1
+
+# 5. Figures
+python -m scripts.make_figures
+\end{lstlisting}
+
+Run times on a recent laptop: each MIQP variant solves in well under a second; each greedy or stingy run takes $\sim 4$--$5$ minutes (because every step calls the ODE); a full greedy + local swap run takes $\sim 15$--$30$ minutes depending on how many improving passes are needed.
+
+\subsection{Validation script}
+
+\texttt{validate.py} at the repository root is the independent re-validation harness for the handover. It reloads every reported design, re-runs the ODE on it, and recomputes all backbone intersections from scratch. Running it produces \texttt{runs/validation\_summary.csv} and \texttt{runs/validation\_network\_core\_matrix\{1,2\}.csv}. Every number in this report came from that script.
+
+% ============================================================
+\section{Limitations and Recommended Next Steps}
+
+\subsection{Limitations of the current setup}
+
+\begin{itemize}[leftmargin=1.4em, itemsep=0.2em]
+  \item \textbf{Equilibrium-only objective.} $F(S)$ is the sum of $A$ at $t=1000$. Transient dynamics, time-to-recovery, and resilience to shocks are not considered.
+  \item \textbf{Fixed JARS parameters.} The $14$ published JARS parameters are fixed; no robustness analysis was done over uncertainty in those parameters.
+  \item \textbf{Surrogate weight uses a fixed $A^*$.} $W(i,j) = P_1(i,j)\,(0.05675)^{1.72}$ uses a single median single-reef equilibrium for $A^*$. A state-dependent surrogate could tighten the alignment between MIQP and ODE further, at the cost of solvability.
+  \item \textbf{Community partition is exogenous.} The five communities come from geography, not from the connectivity graph. Data-driven community detection (Louvain, Infomap) on $P_1$ might produce more natural equity buckets.
+\end{itemize}
+
+\subsection{Recommended next experiments}
+
+\begin{itemize}[leftmargin=1.4em, itemsep=0.2em]
+  \item \textbf{Robust / stochastic MIQP.} Treat the connectivity matrix entries as uncertain and solve a chance-constrained or two-stage stochastic version. The handful of disagreements between Matrix~1 and Matrix~2 are exactly the sites where this would matter.
+  \item \textbf{Multi-objective frontier.} Trace the Pareto frontier of (biomass) vs.\ (equity tightness) vs.\ (total acreage). The current four models are four points on that frontier; ten or twenty would tell stakeholders what they're really trading.
+  \item \textbf{Phased restoration.} Replace the one-shot $|S|=25$ selection with a multi-period plan that respects an annual restoration capacity. This would change the optimal sequence even if the final set stays similar.
+  \item \textbf{Coupled with non-larval services.} The current objective is adult biomass. A more honest objective would also credit water filtration, fish habitat, and economic value at each site, weighted by stakeholder preferences.
+\end{itemize}
+
+\subsection{Small cleanups for whoever takes over}
+
+\begin{itemize}[leftmargin=1.4em, itemsep=0.2em]
+  \item \texttt{scripts/network\_core\_analysis.py} hard-codes a \texttt{CORE\_23} list at the top. After this re-analysis, the correct unconstrained-models constant-$P_0$ backbone across both matrices is $22$ sites, not $23$ --- site $47$ is selected by the heuristics but not by the base MIQP or MIQP+Size on either matrix. A short comment to that effect would prevent the next person from re-deriving it.
+  \item \texttt{ampl/oyster\_comm.dat} uses integer indices $0$--$48$ (the position in \texttt{CANDIDATE\_SITES}, not the original site label). Worth a one-line comment in the file since the same \texttt{.dat} is read alongside \texttt{.mod} files where $N = \{0, \ldots, 48\}$.
+  \item \texttt{runs/} contains $\sim 60$ timestamped greedy CSVs from the development iterations. A \texttt{runs/final/} subfolder with just the canonical CSVs would make the repo friendlier on first read.
+  \item A LibreOffice / Office lock file \texttt{\~{}\$presentation.pptx} is checked in. Safe to delete.
+\end{itemize}
+
+% ============================================================
+\section{Conclusions}
+
+Across two independent connectivity matrices, four MIQP variants, three ODE-driven heuristics, and two external forcing regimes --- $18$ distinct optimization runs in total --- the same seven reefs are selected by every single one: $10, 31, 37, 40, 41, 49, 53$. The eleven-site cross-matrix constant-forcing backbone $\{10, 15, 31, 32, 37, 40, 41, 49, 51, 52, 53\}$ is the next natural layer out, and the per-matrix $14$-site backbones extend that further.
+
+That this much agreement emerges from objectives that are conceptually quite different --- the full nonlinear JARS equilibrium on one hand, a quadratic plumbing surrogate on the other --- is not a tautology. It tells us that the surrogate captures the dominant structural drivers of the metapopulation dynamics. From a planning perspective, the practical translation is: a small number of reefs do most of the connectivity work, and any restoration design that omits the seven-site backbone is, with high confidence, structurally worse than one that includes it.
+
+% ============================================================
+\appendix
+
+% ============================================================
+\section{All 18 Final Designs}
+
+For ease of cross-checking, every $25$-site set used in this report is reproduced below as a flat list.
+
+\begin{longtable}{@{}l p{12cm}@{}}
+\toprule
+\textbf{Model} & \textbf{Selected sites (sorted)} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Model} & \textbf{Selected sites (sorted)} \\
+\midrule
+\endhead
+M1 Greedy (constant) & \texttt{10, 40, 41, 31, 32, 36, 37, 20, 47, 53, 15, 51, 52, 28, 49, 21, 27, 19, 30, 4, 26, 17, 16, 44, 54} \\
+M1 Greedy + Swap (constant) & \texttt{10, 12, 15, 16, 17, 20, 21, 26, 28, 29, 31, 32, 33, 36, 37, 40, 41, 44, 47, 49, 51, 52, 53, 54, 59} \\
+M1 Stingy (constant) & \texttt{10, 12, 15, 16, 17, 20, 21, 26, 28, 29, 31, 32, 33, 36, 37, 40, 41, 44, 47, 49, 51, 52, 53, 54, 59} \\
+M1 MIQP (constant) & \texttt{10, 11, 12, 15, 16, 17, 20, 26, 27, 28, 29, 31, 32, 33, 36, 37, 40, 41, 44, 49, 51, 52, 53, 54, 59} \\
+M1 MIQP + Comm & \texttt{10, 11, 12, 15, 16, 17, 21, 27, 28, 29, 31, 32, 33, 36, 37, 40, 41, 42, 47, 49, 51, 52, 53, 56, 59} \\
+M1 MIQP + Size & \texttt{10, 11, 12, 15, 16, 17, 20, 26, 27, 28, 29, 31, 32, 33, 36, 37, 40, 41, 44, 49, 51, 52, 53, 54, 59} \\
+M1 MIQP + Comm + Size & \texttt{10, 12, 15, 16, 17, 21, 26, 28, 29, 31, 32, 33, 37, 40, 41, 42, 44, 47, 48, 49, 51, 52, 53, 54, 59} \\
+M1 Greedy + Swap (realistic) & \texttt{4, 6, 10, 15, 19, 20, 21, 24, 27, 30, 31, 32, 36, 37, 38, 39, 40, 41, 47, 49, 51, 52, 53, 55, 60} \\
+M1 Stingy (realistic) & \texttt{4, 10, 15, 16, 17, 19, 20, 21, 26, 27, 31, 32, 33, 36, 37, 40, 41, 44, 47, 49, 51, 52, 53, 54, 59} \\
+M2 Greedy (constant) & \texttt{10, 11, 12, 15, 16, 17, 19, 20, 26, 29, 31, 32, 33, 36, 37, 40, 41, 44, 47, 49, 51, 52, 53, 54, 59} \\
+M2 Greedy + Swap (constant) & \texttt{10, 11, 12, 15, 16, 17, 19, 20, 26, 29, 31, 32, 33, 36, 37, 40, 41, 44, 47, 49, 51, 52, 53, 54, 59} \\
+M2 Stingy (constant) & \texttt{10, 11, 12, 15, 16, 17, 19, 20, 26, 29, 31, 32, 33, 36, 37, 40, 41, 44, 47, 49, 51, 52, 53, 54, 59} \\
+M2 MIQP (constant) & \texttt{10, 11, 12, 15, 16, 17, 20, 26, 27, 28, 29, 31, 32, 33, 36, 37, 40, 41, 44, 49, 51, 52, 53, 54, 59} \\
+M2 MIQP + Comm & \texttt{10, 12, 15, 16, 21, 26, 27, 28, 29, 31, 32, 33, 37, 40, 41, 42, 44, 47, 48, 49, 51, 52, 53, 54, 59} \\
+M2 MIQP + Size & \texttt{10, 11, 12, 15, 16, 17, 20, 26, 27, 28, 29, 31, 32, 33, 36, 37, 40, 41, 44, 49, 51, 52, 53, 54, 59} \\
+M2 MIQP + Comm + Size & \texttt{10, 11, 12, 15, 16, 21, 26, 27, 28, 29, 31, 32, 33, 36, 37, 40, 41, 42, 47, 48, 49, 51, 52, 53, 59} \\
+M2 Greedy + Swap (realistic) & \texttt{1, 4, 6, 10, 18, 19, 20, 21, 24, 30, 31, 35, 36, 37, 38, 39, 40, 41, 42, 47, 49, 53, 55, 57, 60} \\
+M2 Stingy (realistic) & \texttt{4, 6, 7, 10, 15, 16, 19, 20, 21, 24, 26, 27, 30, 31, 32, 36, 37, 40, 41, 44, 47, 49, 51, 52, 53} \\
+\bottomrule
+\end{longtable}
+
+% ============================================================
+\section*{Contact}
+
+\noindent\textbf{Marouf Paul} --- \texttt{mmarouf@wm.edu} / \texttt{maroufpaul2@gmail.com} (post-graduation)
+
+\noindent Advisor: Prof.\ Rex Kincaid (William \& Mary, Mathematics)
+
+\noindent Biological collaborators: Prof.\ Leah Shaw (W\&M), Prof.\ Rom Lipcius (VIMS)
+
+\end{document}

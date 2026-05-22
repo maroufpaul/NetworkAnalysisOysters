@@ -243,8 +243,6 @@ Across all 18 model runs (2 matrices × 4 MIQP variants + 3 heuristics + realist
 
 The 7-site backbone is the practical takeaway: these reefs sit in dense subnetworks (high eigenvector centrality, high PageRank) or act as bridges (high betweenness), and every optimization method we ran selects them. **Any restoration design that omits them is structurally weaker.**
 
-> ⚠️ **Note on the backbone:** earlier drafts of the report listed `{10, 31, 36, 40, 41, 49, 53}` — that was an error. The correct global backbone contains site **37**, not 36. Site 36 is missing from M1 MIQP+Comm+Size and M2 MIQP+Comm, while site 37 is in every one of the 18 runs. See Appendix A of the handover report for the full errata.
-
 ---
 
 ## ✅ Reproducing Everything

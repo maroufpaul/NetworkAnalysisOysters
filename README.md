@@ -294,7 +294,6 @@ See §7 of the handover report for the full discussion.
 
 ## 📚 References
 
-- Pinedo, M.L. *Scheduling: Theory, Algorithms, and Systems* (background on optimization heuristics)
 - Gurobi Optimization, LLC. *Gurobi Optimizer Reference Manual.*
 - AMPL: Fourer, R., Gay, D.M., Kernighan, B.W. *AMPL: A Modeling Language for Mathematical Programming.*
 - JARS dynamics: based on metapopulation ODE work by Prof. Leah Shaw (W&M).

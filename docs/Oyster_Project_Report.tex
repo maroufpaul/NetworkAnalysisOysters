@@ -117,7 +117,7 @@ This report has two jobs:
 
 \begin{itemize}[leftmargin=1.4em, itemsep=0.2em]
   \item Describe the problem, the JARS metapopulation model, the optimization formulations, and the heuristic algorithms in enough detail that the code is reproducible without reading every script.
-  \item Report only verified results. Every number in the tables below was re-derived from the repository by re-running the JARS ODE on the final selected sets, and every cross-model intersection was recomputed from the saved CSVs. Earlier drafts of this report contained a handful of small but real errors that have been corrected here --- those corrections are listed explicitly in Appendix~A.
+  \item Report only verified results. Every number in the tables below was re-derived from the repository by re-running the JARS ODE on the final selected sets, and every cross-model intersection was recomputed from the saved CSVs.
 \end{itemize}
 
 Throughout the report I use the following convention: greedy, post-greedy 1-swap, and stingy backward elimination are evaluated under the full JARS equilibrium objective $F(S)$, while all MIQP variants optimize a quadratic plumbing surrogate $\tilde{F}(S)$ using AMPL and Gurobi. Both views are needed because the surrogate is fast and provable but lossy, and the ODE is faithful but expensive.

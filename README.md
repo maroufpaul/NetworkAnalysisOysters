@@ -306,7 +306,7 @@ See §7 of the handover report for the full discussion.
 **Advisor:** Prof. Rex Kincaid (Mathematics, William & Mary)
 **Collaborators:** Prof. Leah Shaw (W&M), Prof. Rom Lipcius (Virginia Institute of Marine Science)
 
-This project was conducted as part of an M.S. thesis in Computational Operations Research at William & Mary, focused on computational optimization for marine ecosystem restoration.
+This project was conducted as part of an M.S. research in Computational Operations Research at William & Mary, focused on computational optimization for marine ecosystem restoration.
 
 **Contact:**
 📧 mmarouf@wm.edu / maroufpaul2@gmail.com (post-graduation)

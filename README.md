@@ -239,7 +239,7 @@ Across all 18 model runs (2 matrices × 4 MIQP variants + 3 heuristics + realist
 - **Cross-matrix constant-P₀ backbone:**
   `{10, 15, 31, 32, 37, 40, 41, 49, 51, 52, 53}` — **11 sites**
 - **Per-matrix constant-P₀ backbone:**
-  Matrix 1: 14 sites; Matrix 2: 14 sites
+  Matrix 1: 15 sites; Matrix 2: 15 sites
 
 The 7-site backbone is the practical takeaway: these reefs sit in dense subnetworks (high eigenvector centrality, high PageRank) or act as bridges (high betweenness), and every optimization method we ran selects them. **Any restoration design that omits them is structurally weaker.**
 

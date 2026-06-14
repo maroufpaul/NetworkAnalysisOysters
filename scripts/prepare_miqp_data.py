@@ -63,7 +63,7 @@ def main():
     P = P * P1scaling
 
     # remove self-loops (no reward for staying on same reef)
-    #np.fill_diagonal(P, 0.0)
+    # np.fill_diagonal(P, 0.0)
 
     # constant external larvae
     Pe = 170.0 * np.ones(n, dtype=float)

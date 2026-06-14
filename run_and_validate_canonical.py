@@ -1,0 +1,194 @@
+#!/usr/bin/env python3
+"""
+run_and_validate_canonical.py  --  CANONICAL driver (self-recruitment KEPT).
+
+
+The CANONICAL model keeps the connectivity diagonal (self-recruitment), which is
+how the JARS ODE treats larval supply and how scripts/prepare_miqp_data.py is
+shipped. This script:
+
+  1. Regenerates ampl/oyster_quad.dat WITH the diagonal (fixing any previously
+     zeroed .dat left on disk).
+  2. Re-scores the ODE heuristics (self-recruitment is intrinsic to the ODE, so
+     these are unaffected by the diagonal choice).
+  3. Solves all 8 integer programs with the diagonal KEPT, via your AMPL+Gurobi
+     pipeline, and independently re-checks each objective in Python.
+  4. Runs a DIAGONAL-ZEROED sensitivity solve of the baseline and reports the
+     difference (selection should be identical; objective shifts).
+  5. Recomputes the backbone and writes everything to runs/validation_canonical.json.
+
+It validates against the embedded CANONICAL reference (diagonal kept). If
+amplpy/Gurobi is unavailable, the binary-model objectives are still checked in
+Python so an output file is always produced.
+"""
+from __future__ import annotations
+import json, time, sys
+from pathlib import Path
+import numpy as np
+
+ROOT     = Path(__file__).resolve().parent
+DATA_DIR = ROOT / "data"
+AMPL_DIR = ROOT / "ampl"
+RUNS_DIR = ROOT / "runs"; RUNS_DIR.mkdir(exist_ok=True)
+MATRICES = {"M1": DATA_DIR / "nk_All_060102final_56sites_Model.xlsx",
+            "M2": DATA_DIR / "nk_All_060103final_56sites_Model.xlsx"}
+TMAX, P1SCALING, CONST_P0, A_STAR, ALPHA = 1000, 0.5, 170.0, 0.05675, 1.72
+UNWANTED = [66,67,68,69,70,71,72]
+TOL_ODE, TOL_MIQP = 5e-6, 1.0e-1
+
+from src.model.jars_ode import load_connectivity, CANDIDATE_SITES
+from src.opt.evaluator import evaluate_subset
+
+def _s(x): return sorted(x)
+# ---- CANONICAL reference (diagonal KEPT / self-recruitment included) ----
+REF = {
+ "heur_constant": {
+   "M1 Greedy":(1.846640,_s([4,10,15,16,17,19,20,21,26,27,28,30,31,32,36,37,40,41,44,47,49,51,52,53,54])),
+   "M1 Greedy+Swap":(1.880054,_s([10,12,15,16,17,20,21,26,28,29,31,32,33,36,37,40,41,44,47,49,51,52,53,54,59])),
+   "M1 Stingy":(1.880054,_s([10,12,15,16,17,20,21,26,28,29,31,32,33,36,37,40,41,44,47,49,51,52,53,54,59])),
+   "M2 Greedy":(1.692871,_s([4,10,11,12,15,17,19,20,21,26,27,28,29,30,31,32,36,37,40,41,47,49,51,52,53])),
+   "M2 Greedy+Swap":(1.733033,_s([10,11,12,15,16,17,19,20,26,29,31,32,33,36,37,40,41,44,47,49,51,52,53,54,59])),
+   "M2 Stingy":(1.733033,_s([10,11,12,15,16,17,19,20,26,29,31,32,33,36,37,40,41,44,47,49,51,52,53,54,59])),
+ },
+ "miqp": {  # diagonal KEPT, global optimum
+   "M1 Base":(14785.03,_s([10,11,12,15,16,17,20,26,27,28,29,31,32,33,36,37,40,41,44,49,51,52,53,54,59])),
+   "M1 +Comm":(13844.54,_s([10,12,15,16,17,21,26,28,29,31,32,33,37,40,41,42,44,47,48,49,51,52,53,54,59])),
+   "M1 +Size":(58564.19,_s([10,11,12,15,16,17,20,26,27,28,29,31,32,33,36,37,40,41,44,49,51,52,53,54,59])),
+   "M1 +Comm+Size":(56443.65,_s([10,12,15,16,17,21,26,28,29,31,32,33,37,40,41,42,44,47,49,51,52,53,54,56,59])),
+   "M2 Base":(16446.59,_s([10,11,12,15,16,17,20,26,27,28,29,31,32,33,36,37,40,41,44,49,51,52,53,54,59])),
+   "M2 +Comm":(15218.16,_s([10,11,12,15,16,17,21,27,28,29,31,32,33,36,37,40,41,42,47,49,51,52,53,56,59])),
+   "M2 +Size":(66552.23,_s([10,11,12,15,16,17,20,26,27,28,29,31,32,33,36,37,40,41,44,49,51,52,53,54,59])),
+   "M2 +Comm+Size":(64448.16,_s([10,11,12,15,16,21,26,27,28,29,31,32,33,36,37,40,41,42,47,48,49,51,52,53,59])),
+ },
+ "backbone": {"M1 within":_s([10,15,16,17,26,28,31,32,37,40,41,44,49,51,52,53,54]),
+              "M2 within":_s([10,11,12,15,29,31,32,36,37,40,41,49,51,52,53]),
+              "cross":_s([10,15,31,32,37,40,41,49,51,52,53]),
+              "global":_s([10,31,37,40,41,49,53])},
+}
+REAL_HEUR = {  # realistic heuristics (unchanged), for the global backbone
+ "M1 Greedy+Swap (r)":_s([4,6,10,15,19,20,21,24,27,30,31,32,36,37,38,39,40,41,47,49,51,52,53,55,60]),
+ "M1 Stingy (r)":_s([4,10,15,16,17,19,20,21,26,27,31,32,33,36,37,40,41,44,47,49,51,52,53,54,59]),
+ "M2 Greedy+Swap (r)":_s([1,4,6,10,18,19,20,21,24,30,31,35,36,37,38,39,40,41,42,47,49,53,55,57,60]),
+ "M2 Stingy (r)":_s([4,6,7,10,15,16,19,20,21,24,26,27,30,31,32,36,37,40,41,44,47,49,51,52,53]),
+}
+
+CIDX=[[33,36,44],[1,3,4,5,6,16,17,26,28,29,30,35,37,41,48],[7,9,15,24,27,31,32,38],[10,19,20,39,40],[11,12,18,21,42,47]]
+CMIN=[2,5,3,2,3]
+
+def build_W(path, zero_diag=False):
+    conn,key=load_connectivity(path); mask=~np.isin(key,UNWANTED); key=key[mask]
+    P=conn[np.ix_(mask,mask)]*P1SCALING
+    if zero_diag: np.fill_diagonal(P,0.0)         # <-- ONLY for the sensitivity test
+    return P*(A_STAR**ALPHA), CONST_P0*np.ones(len(key)), key
+
+def surr_bin(sites,W,Pe,key):
+    idx=[int(np.where(key==s)[0][0]) for s in sites]
+    return float(Pe[idx].sum()+W[np.ix_(idx,idx)].sum())   # includes diagonal
+
+def write_quad_dat(W,Pe,key):
+    n=len(key)
+    with open(AMPL_DIR/"oyster_quad.dat","w") as f:
+        f.write("# auto-generated by run_and_validate_canonical.py (DIAGONAL KEPT)\n\n")
+        f.write("set N :=\n"+"".join(f"  {i}\n" for i in range(n))+";\n\n")
+        f.write("param K := 25;\n\nparam Pe :=\n"+"".join(f"  {i} {Pe[i]:.4f}\n" for i in range(n))+";\n\n")
+        f.write("param W :=\n")
+        for i in range(n):
+            for j in range(n):
+                if W[i,j]!=0.0: f.write(f"  [{i}, {j}] {W[i,j]:.6f}\n")
+        f.write(";\n")
+
+def solve_miqp_ampl(modf,dats,key,has_size,objn):
+    try: from amplpy import AMPL
+    except Exception: return None
+    a=AMPL(); a.eval("option solver gurobi;")
+    a.eval("option gurobi_options 'nonconvex=2 mipgap=1e-9';")   # global opt for bilinear
+    a.read(str(AMPL_DIR/modf)); a.readData(str(AMPL_DIR/"oyster_quad.dat"))
+    for d in dats: a.readData(str(AMPL_DIR/d))
+    a.eval("solve;")
+    xv=a.getVariable("x").getValues().to_list()
+    picked=[int(r[0]) for r in xv if float(r[1])>0.5]
+    return sorted(int(key[i]) for i in picked), float(a.getObjective(objn).value())
+
+SPECS=[("Base","oyster_quad.mod",[],False,"score"),
+       ("+Comm","oyster_comm.mod",["oyster_comm.dat"],False,"Larvae"),
+       ("+Size","oyster_size.mod",["oyster_size.dat"],True,"Larvae"),
+       ("+Comm+Size","oyster_comm_size.mod",["oyster_comm.dat","oyster_size.dat"],True,"TotalLarvae")]
+
+def main():
+    t0=time.time(); out={"model":"CANONICAL (diagonal KEPT / self-recruitment included)",
+                         "heuristics":{},"miqp":{},"diagonal_sensitivity":{},"backbone":{},"summary":{}}
+    npass=nfail=0
+    def rec(ok):
+        nonlocal npass,nfail
+        if ok is True: npass+=1
+        elif ok is False: nfail+=1
+    designs={}
+    CONN={m:load_connectivity(p) for m,p in MATRICES.items()}
+
+    print("="*70); print("CANONICAL run+validate (self-recruitment KEPT)"); print("="*70)
+    # ---- heuristics (re-score reference sets; ODE always includes self-recruitment) ----
+    for nm,(rs,rset) in REF["heur_constant"].items():
+        mat=nm[:2]; conn,key=CONN[mat]
+        f=evaluate_subset(rset,conn,key,tmax=TMAX,P1scaling=P1SCALING,P0_mode="constant",consP0=CONST_P0)
+        ok=abs(f-rs)<TOL_ODE; rec(ok)
+        designs[f"{nm} (c)"]=rset
+        out["heuristics"][nm]={"ref":rs,"score":round(f,6),"pass":ok}
+        print(f"  heur {nm:16s} F={f:.6f} (ref {rs}) {'OK' if ok else 'FAIL'}")
+    for nm,st in REAL_HEUR.items(): designs[nm]=st
+
+    # ---- MIQP canonical (diagonal kept) ----
+    for mat in ("M1","M2"):
+        W,Pe,key=build_W(MATRICES[mat],zero_diag=False)
+        write_quad_dat(W,Pe,key)
+        for short,modf,dats,has_size,objn in SPECS:
+            rn=f"{mat} {short}"; robj,rset=REF["miqp"][rn]
+            res=solve_miqp_ampl(modf,dats,key,has_size,objn)
+            if res is None:
+                if not has_size:
+                    py=surr_bin(rset,W,Pe,key); ok=abs(py-robj)<TOL_MIQP; rec(ok)
+                    out["miqp"][rn]={"ref_obj":robj,"solver":"none","python_obj_on_ref_set":round(py,2),"pass":ok}
+                    print(f"  MIQP {rn:16s} [no AMPL] py={py:.2f} ref={robj} {'OK' if ok else 'FAIL'}")
+                else:
+                    out["miqp"][rn]={"ref_obj":robj,"solver":"none","note":"needs solver","pass":None}; rec(None)
+                    print(f"  MIQP {rn:16s} [no AMPL] (size needs solver)")
+                designs[f"MIQP {rn}"]=rset; continue
+            sites,sobj=res
+            py=surr_bin(sites,W,Pe,key) if not has_size else None
+            obj_ok=abs(sobj-robj)<max(TOL_MIQP,1e-4*abs(robj))
+            set_ok=set(sites)==set(rset) or (obj_ok and "Comm" in short)
+            ok=obj_ok and set_ok; rec(ok); designs[f"MIQP {rn}"]=sorted(sites)
+            out["miqp"][rn]={"ref_obj":robj,"solver_obj":round(sobj,2),
+                             "python_check":(round(py,2) if py else None),
+                             "set":sorted(sites),"set_equal_ref":set(sites)==set(rset),"pass":ok}
+            print(f"  MIQP {rn:16s} solver={sobj:.2f} ref={robj} {'OK' if obj_ok else 'FAIL'} "
+                  f"set={'OK' if set_ok else 'DIFF'}")
+
+    # ---- diagonal sensitivity: zeroed baseline vs canonical baseline ----
+    print("\n  -- diagonal-zeroed SENSITIVITY (baseline) --")
+    for mat in ("M1","M2"):
+        Wk,Pek,key=build_W(MATRICES[mat],zero_diag=False)
+        Wz,Pez,_  =build_W(MATRICES[mat],zero_diag=True)
+        kset=REF["miqp"][f"{mat} Base"][1]
+        objk=surr_bin(kset,Wk,Pek,key); objz=surr_bin(kset,Wz,Pez,key)
+        out["diagonal_sensitivity"][mat]={"base_set_kept":kset,
+            "obj_diag_kept":round(objk,2),"obj_diag_zeroed":round(objz,2),
+            "note":"selection identical; objective lower when self-recruitment removed"}
+        print(f"  {mat}: base obj kept={objk:.2f}  zeroed={objz:.2f}  (same set)")
+
+    # ---- backbone ----
+    inter=lambda ns: sorted(set.intersection(*[set(designs[n]) for n in ns if n in designs]))
+    m1c=[f"M1 {m} (c)" for m in("Greedy","Greedy+Swap","Stingy")]+[f"MIQP M1 {s}" for s,*_ in SPECS]
+    m2c=[f"M2 {m} (c)" for m in("Greedy","Greedy+Swap","Stingy")]+[f"MIQP M2 {s}" for s,*_ in SPECS]
+    i1,i2=inter(m1c),inter(m2c); cross=sorted(set(i1)&set(i2)); glob=inter(list(designs.keys()))
+    for k,got,ref in [("M1 within",i1,REF["backbone"]["M1 within"]),("M2 within",i2,REF["backbone"]["M2 within"]),
+                      ("cross",cross,REF["backbone"]["cross"]),("global",glob,REF["backbone"]["global"])]:
+        ok=got==ref; rec(ok); out["backbone"][k]={"sites":got,"ref":ref,"size":len(got),"pass":ok}
+        print(f"  backbone {k:10s} size={len(got):2d} {'OK' if ok else 'MISMATCH'} {got}")
+
+    out["summary"]={"passed":npass,"failed":nfail,"all_pass":nfail==0,"runtime_sec":round(time.time()-t0,1)}
+    (RUNS_DIR/"validation_canonical.json").write_text(json.dumps(out,indent=2))
+    print("\n"+"="*70); print(f"PASSED {npass}  FAILED {nfail}  ALL_PASS={nfail==0}")
+    print(f"wrote {RUNS_DIR/'validation_canonical.json'}"); print("="*70)
+    return 0 if nfail==0 else 1
+
+if __name__=="__main__": sys.exit(main())

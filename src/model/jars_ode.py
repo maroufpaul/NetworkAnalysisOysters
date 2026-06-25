@@ -1,6 +1,25 @@
 # src/model/jars_ode.py
-
-#Dr. Leah shaw's ODE models JARS ODE model implementation
+#
+# Python implementation of the JARS (Juvenile, Adult, Reef, Sediment)
+# oyster population model.
+#
+# The single-reef JARS model and all demographic parameters below are from:
+#   Lipcius, R.N., Y. Zhang, J. Zhou, L.B. Shaw, and J. Shi (2021),
+#   "Modeling oyster reef restoration: larval supply and reef geometry
+#   jointly determine population resilience and performance,"
+#   Frontiers in Marine Science, 8:677640.
+#   https://doi.org/10.3389/fmars.2021.677640
+#   (Parameter values match Table 2; model time t is in years.)
+#
+# JARS itself revises the earlier three-equation reef/sediment model of
+#   Jordan-Cooley et al. (2011), J. Theoretical Biology 289:1-11.
+#
+# The metapopulation extension implemented here -- larval coupling across
+# sites via the connectivity matrix (the P1 term) -- follows the TSPS study:
+#   Lipcius, Shen, Shaw, and Shi (2024), USACE Chesapeake Watershed CESU
+#   Final Report W912HZ-23-02-0015.
+#
+# Original MATLAB by Prof. Leah B. Shaw (William & Mary); Python port by Marouf Paul.
 
 import numpy as np
 import pandas as pd

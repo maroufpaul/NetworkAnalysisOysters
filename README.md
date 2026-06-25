@@ -21,7 +21,7 @@ Because oyster larvae disperse via tidal currents, each reef's value depends not
 The pipeline has three modeling layers:
 
 1. **JARS metapopulation ODE** (`src/model/jars_ode.py`)
-   Four coupled life stages — juveniles, adults, reef shell, sediment — with larval transport between sites driven by an empirical connectivity matrix `P₁` and an external supply vector `P₀`. The internal larval sum includes each reef's own contribution (self-recruitment). The nonlinear larval-production term `|A|^1.72` makes retentive clusters disproportionately valuable. Model time is in **years** (the JARS rate parameters are annual; Lipcius et al. 2021, Tables 1–2). *(Original MATLAB by Prof. Leah Shaw; Python port by Marouf Paul.)*
+   Four coupled life stages — juveniles, adults, reef shell, sediment — with larval transport between sites driven by an empirical connectivity matrix `P₁` and an external supply vector `P₀`. The internal larval sum includes each reef's own contribution (self-recruitment). The nonlinear larval-production term `|A|^1.72` makes retentive clusters disproportionately valuable. Model time is in **years** (the JARS rate parameters are annual; Lipcius et al. 2021, Tables 1–2). *(The single-reef JARS model and its parameters are from Lipcius et al. 2021, Front. Mar. Sci. 8:677640, which itself revises Jordan-Cooley et al. 2011; the metapopulation extension with larval connectivity follows the USACE CESU 2024 report. Original MATLAB by Prof. Leah Shaw; Python port by Marouf Paul.)*
 
 2. **ODE-driven heuristics** (`src/opt/`)
    - **Greedy forward** — fast but myopic
@@ -325,7 +325,8 @@ See the discussion section of the technical report for the full treatment.
 
 ## 📚 References
 
-- Lipcius, R. N., Zhang, Y., Zhou, J., Shaw, L. B., & Shi, J. (2021). *Modeling oyster reef restoration: larval supply and reef geometry jointly determine population resilience and performance.* Frontiers in Marine Science, 8, 677640. (Source of the JARS model and parameter table.)
+- Lipcius, R. N., Zhang, Y., Zhou, J., Shaw, L. B., & Shi, J. (2021). Modeling oyster reef restoration: larval supply and reef geometry jointly determine population resilience and performance. Frontiers in Marine Science, 8:677640. https://doi.org/10.3389/fmars.2021.677640 (Source of the JARS model and parameter table.)
+- Lipcius, R. N., Shen, J., Shaw, L. B., & Shi, J. (2024). Oyster larval transport / hydrodynamic modeling at Tangier/Pocomoke Sound, Virginia. U.S. Army Corps of Engineers, Chesapeake Watershed CESU W912HZ-23-02-0015, Final Report. (Source of the connectivity matrices and the metapopulation JARS extension.)
 - Gurobi Optimization, LLC. *Gurobi Optimizer Reference Manual.*
 - AMPL: Fourer, R., Gay, D. M., Kernighan, B. W. *AMPL: A Modeling Language for Mathematical Programming.*
 

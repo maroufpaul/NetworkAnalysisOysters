@@ -19,6 +19,10 @@ Experiments
   E4  Surrogate-parameter sensitivity: re-solve base MIQP over a grid of A* and
       P1scaling; report how stable the selected set is (Jaccard vs the canonical
       K=25 set).
+  E5  Self-recruitment (diagonal) sensitivity: score the base MIQP set with the
+      connectivity diagonal KEPT (canonical) vs ZEROED, on both matrices. The
+      selection is identical either way; only the objective magnitude changes.
+      Reproduces the self-recruitment numbers in the paper (Section 5.6).
 """
 from __future__ import annotations
 import json, time, sys
@@ -59,12 +63,19 @@ BACKBONE7  = [10,31,37,40,41,49,53]
 BACKBONE15 = {"M1":[10,15,16,28,31,32,37,40,41,44,49,51,52,53,54],
               "M2":[10,11,12,15,29,31,32,36,37,40,41,49,51,52,53]}
 
-def build_W(path, a_star=A_STAR, p1=P1SCALING):
+def build_W(path, a_star=A_STAR, p1=P1SCALING, zero_diag=True):
     conn, key = load_connectivity(path)
     mask = ~np.isin(key, UNWANTED); key = key[mask]
     P = conn[np.ix_(mask, mask)] * p1
-    np.fill_diagonal(P, 0.0)
+    if zero_diag:
+        np.fill_diagonal(P, 0.0)
     return P*(a_star**ALPHA), CONST_P0*np.ones(len(key)), key
+
+def surr_bin(sites, W, Pe, key):
+    """Static surrogate objective on a selected set: external supply plus the
+    (possibly diagonal-inclusive) connectivity weights among the selected sites."""
+    idx = [int(np.where(key == s)[0][0]) for s in sites]
+    return float(Pe[idx].sum() + W[np.ix_(idx, idx)].sum())
 
 def solve_base_miqp(W, Pe, key, K):
     """Exact base BQP (diag zeroed) via HiGHS linearization. Returns sorted labels, obj."""
@@ -172,6 +183,24 @@ def main():
         print(f"  {mat}: Jaccard(set, canonical) over 15-point grid: "
               f"min={min(jvals):.3f} mean={np.mean(jvals):.3f}")
     out["E4_param_sensitivity"]=e4
+
+    # ---------- E5: self-recruitment (diagonal) sensitivity ----------
+    print("\n"+"="*68); print("E5  Self-recruitment (diagonal) sensitivity of the base MIQP objective"); print("="*68)
+    e5={}
+    for mat in ("M1","M2"):
+        Wk,Pe,key = build_W(MATRICES[mat], zero_diag=False)   # diagonal KEPT (canonical)
+        Wz,_,_    = build_W(MATRICES[mat], zero_diag=True)     # diagonal ZEROED (sensitivity)
+        base = MIQP_SETS[f"{mat} Base"]                        # selection is identical either way
+        objk = surr_bin(base, Wk, Pe, key)
+        objz = surr_bin(base, Wz, Pe, key)
+        drop = (objk-objz)/objk*100.0 if objk else 0.0
+        e5[mat] = {"base_set":base,
+                   "obj_diag_kept":round(objk,2),
+                   "obj_diag_zeroed":round(objz,2),
+                   "pct_drop_when_zeroed":round(drop,2),
+                   "note":"selection identical kept-vs-zeroed; only the objective magnitude changes"}
+        print(f"  {mat}: kept={objk:.2f}  zeroed={objz:.2f}  drop={drop:.1f}%  (same base set)")
+    out["E5_self_recruitment_sensitivity"]=e5
 
     out["runtime_sec"]=round(time.time()-t0,1)
     (RUNS_DIR/"extra_experiments.json").write_text(json.dumps(out,indent=2))

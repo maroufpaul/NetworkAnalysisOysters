@@ -32,8 +32,7 @@ dist/
 *.bak
 *.tmp
 
-# Project-specific outputs
-/notebooks/*-checkpoint*.ipynb
+# Solver / AMPL artifacts
 *.nl
 *.sol
 *.mst
@@ -41,15 +40,25 @@ dist/
 *.out
 *.walk
 *.fix
-*.log  # AMPL / solver logs if you produce them
 *.gz
+# (AMPL/solver logs are already covered by *.log above)
 
-# Optional: ignore large raw data if you don’t want it tracked
+# ---- Project run artifacts (regenerable outputs; not source) ----
+# Timestamped greedy search dumps (dozens accumulate; all reproducible)
+runs/greedy_*_sites.csv
+runs/greedy_*_summary.txt
+runs/greedy_*_sites.png
+# Validation / experiment outputs written by the driver scripts
+runs/*.json
+# NOTE: keep runs/oyster_index_mapping_matrix*.csv tracked if the MIQP
+# drivers read it as an input (do NOT add a blanket runs/*.csv rule).
+
+# Optional: ignore large raw data if you don't want it tracked
 # (Keep the Excel model file if you want the repo to be runnable)
 # /data/raw/*
 # *.csv  # comment this out if you want CSVs tracked
 
 # Plots and generated images (if auto-generated)
-# /plots/
+# /figures/
 # *.png
 # *.pdf

@@ -1,17 +1,28 @@
 # scripts/network_core_analysis.py
+#
+# Network-centrality analysis of the TSPS larval-connectivity matrices.
+#
+# What this does (and how it differs from the earlier version):
+#   * Ranks ALL 49 candidate sites (66-72 dropped), not a 23-site subset.
+#   * Treats the connectivity entry as a *strength* (higher = stronger link).
+#     For betweenness this means edge DISTANCE = 1 / weight, so strong links
+#     are short paths.  (The earlier version passed the strength directly as a
+#     distance, which rewarded weak connections -- that was a bug.)
+#   * Separates self-recruitment (the matrix diagonal) into its own column
+#     instead of folding it into in/out strength.
+#   * --self-loops {on,off} controls whether the diagonal is fed back into the
+#     spectral metrics (pagerank, eigenvector).  Default "on", matching the
+#     canonical model that keeps self-recruitment.  Betweenness and strength
+#     always use the off-diagonal transport network.
+#   * Flags the seven global-backbone sites and prints where each lands.
 
 from pathlib import Path
 import argparse
 from networkx.exception import PowerIterationFailedConvergence
 
-
 import numpy as np
 import pandas as pd
 import networkx as nx
-
-# ---------------------------------------------------------------------
-# Paths / constants (aligned with your existing project)
-# ---------------------------------------------------------------------
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
@@ -24,61 +35,33 @@ MATRIX_FILES = {
     "2": "nk_All_060103final_56sites_Model.xlsx",
 }
 
-# 23 sites that are common across ALL constant-P0 models in BOTH matrices
-CORE_23 = [
-    10, 12, 15, 16, 17,
-    20, 26, 29, 31, 32,
-    33, 36, 37, 40, 41,
-    44, 47, 49, 51, 52,
-    53, 54, 59,
-]
+# Seven sites selected by every optimized design (the global backbone).
+BACKBONE_7 = [10, 31, 37, 40, 41, 49, 53]
 
+# Metrics that feed the combined average rank.
+RANK_METRICS = ["out_strength", "in_strength", "betweenness", "eigenvector", "pagerank"]
 
-# ---------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------
 
 def load_connectivity(matrix_id: str):
-    """
-    Load the Excel connectivity matrix for the chosen matrix_id ("1" or "2"),
-    drop sites 66-72, and return:
-
-        labels: np.array of site IDs (e.g., [1,2,3,...,60 minus dropped])
-        P:      2D np.array of internal connectivity (donor->receiver)
-
-    We use the *raw* P (before scaling / surrogate), because we want the
-    actual plumbing, not the surrogate objective.
-    """
-    xlsx_name = MATRIX_FILES[matrix_id]
-    excel_path = DATA_DIR / xlsx_name
-
+    """Load raw connectivity for matrix_id, drop 66-72, return (labels, P)
+    with P[i, j] = larval flow from donor i to receiver j."""
+    excel_path = DATA_DIR / MATRIX_FILES[matrix_id]
     arr = pd.read_excel(excel_path, header=None).values
 
-    # First row (except col 0) = site labels
     labels = arr[0, 1:].astype(int)
-    # Main matrix starts at row 1, col 1
     P_full = arr[1:, 1:].astype(float)
 
-    # Drop unwanted sites (66-72)
     mask = ~np.isin(labels, UNWANTED)
     labels = labels[mask]
     P = P_full[np.ix_(mask, mask)]
-
     return labels, P
 
 
-def build_graph(labels: np.ndarray, P: np.ndarray) -> nx.DiGraph:
-    """
-    Build a directed weighted graph from the connectivity matrix.
-
-    Nodes are site IDs (e.g., 1..60 minus dropped).
-    Edge weight = larval connectivity from i -> j.
-
-    We ignore zero entries.
-    """
+def build_graph(labels: np.ndarray, P: np.ndarray, self_loops: bool) -> nx.DiGraph:
+    """Directed weighted transport graph. Off-diagonal edges carry weight
+    (strength) and distance = 1/weight. Diagonal added as self-loops only when
+    self_loops is True, and self-loops carry no distance."""
     G = nx.DiGraph()
-
-    # Add nodes explicitly for clarity
     for lab in labels:
         G.add_node(int(lab))
 
@@ -87,120 +70,112 @@ def build_graph(labels: np.ndarray, P: np.ndarray) -> nx.DiGraph:
         src = int(labels[i])
         for j in range(n):
             w = float(P[i, j])
-            if w > 0.0:
-                dst = int(labels[j])
-                G.add_edge(src, dst, weight=w)
-
+            if w <= 0.0:
+                continue
+            dst = int(labels[j])
+            if i == j:
+                if self_loops:
+                    G.add_edge(src, dst, weight=w)
+            else:
+                G.add_edge(src, dst, weight=w, distance=1.0 / w)
     return G
 
 
-def compute_metrics(G: nx.DiGraph) -> pd.DataFrame:
-    """
-    Compute network metrics on the full graph:
+def compute_metrics(labels: np.ndarray, P: np.ndarray, self_loops: bool) -> pd.DataFrame:
+    n = len(labels)
+    off = P.copy()
+    diag = np.diag(off).copy()
+    np.fill_diagonal(off, 0.0)
 
-    - in_strength: sum of incoming weights
-    - out_strength: sum of outgoing weights
-    - betweenness_centrality (weighted)
-    - eigenvector_centrality (weighted, power-iteration, works for disconnected)
-    - pagerank (weighted)
+    out_strength = off.sum(axis=1)
+    in_strength = off.sum(axis=0)
 
-    Returns a DataFrame with one row per site.
-    """
-    # Strength = weighted in/out degree
-    in_strength = dict(G.in_degree(weight="weight"))
-    out_strength = dict(G.out_degree(weight="weight"))
+    G = build_graph(labels, P, self_loops=self_loops)
 
-    # Betweenness centrality (weighted)
-    betw = nx.betweenness_centrality(G, weight="weight", normalized=True)
-
-    # Eigenvector centrality (weighted, power-method version)
-    # This works even if the graph is disconnected.
+    betw = nx.betweenness_centrality(G, weight="distance", normalized=True)
     try:
-        eig = nx.eigenvector_centrality(
-            G,
-            max_iter=1000,
-            tol=1.0e-06,
-            weight="weight",
-        )
+        eig = nx.eigenvector_centrality(G, max_iter=2000, tol=1.0e-06, weight="weight")
     except PowerIterationFailedConvergence:
-        # If for some reason it still doesn't converge, just set all to 0
-        eig = {n: 0.0 for n in G.nodes()}
-
-    # PageRank (weighted)
+        eig = {int(l): 0.0 for l in labels}
     pr = nx.pagerank(G, weight="weight")
 
-    # Assemble DataFrame
-    nodes = sorted(G.nodes())
-    df = pd.DataFrame({
-        "site_id": nodes,
-        "in_strength": [in_strength[n] for n in nodes],
-        "out_strength": [out_strength[n] for n in nodes],
-        "betweenness": [betw[n] for n in nodes],
-        "eigenvector": [eig[n] for n in nodes],
-        "pagerank": [pr[n] for n in nodes],
-    })
+    rows = []
+    for i, lab in enumerate(labels):
+        lab = int(lab)
+        rows.append({
+            "site_id": lab,
+            "out_strength": out_strength[i],
+            "in_strength": in_strength[i],
+            "self_recruitment": diag[i],
+            "betweenness": betw.get(lab, 0.0),
+            "eigenvector": eig.get(lab, 0.0),
+            "pagerank": pr.get(lab, 0.0),
+            "backbone": lab in set(BACKBONE_7),
+        })
+    df = pd.DataFrame(rows)
 
-    # Ranks (lower = more central)
-    for col in ["in_strength", "out_strength", "betweenness", "eigenvector", "pagerank"]:
-        df[f"rank_{col}"] = df[col].rank(ascending=False, method="min")
+    for col in RANK_METRICS:
+        df[f"rank_{col}"] = df[col].rank(ascending=False, method="min").astype(int)
+    df["avg_rank"] = df[[f"rank_{c}" for c in RANK_METRICS]].mean(axis=1)
 
-    # Simple average rank across metrics as a combined score
-    rank_cols = [c for c in df.columns if c.startswith("rank_")]
-    df["avg_rank"] = df[rank_cols].mean(axis=1)
+    return df.sort_values("avg_rank").reset_index(drop=True)
 
+
+def run_one(matrix_id: str, self_loops: bool):
+    labels, P = load_connectivity(matrix_id)
+    df = compute_metrics(labels, P, self_loops=self_loops)
+
+    show = ["site_id", "backbone", "out_strength", "in_strength",
+            "self_recruitment", "betweenness", "eigenvector", "pagerank", "avg_rank"]
+    rank_show = ["site_id"] + [f"rank_{c}" for c in RANK_METRICS] + ["avg_rank"]
+    bb = df[df["backbone"]].sort_values("avg_rank")
+    r37 = df[df["site_id"] == 37].iloc[0]
+
+    # Build the report as text so it goes to both the screen and a file, in order.
+    lines = []
+    lines.append("=" * 92)
+    lines.append(f"NETWORK CENTRALITY, ALL {len(labels)} SITES  |  matrix {matrix_id}  "
+                 f"|  self-loops {'ON' if self_loops else 'OFF'}")
+    lines.append("=" * 92)
+    with pd.option_context("display.width", 200, "display.max_rows", None,
+                           "display.float_format", lambda v: f"{v:,.4f}"):
+        lines.append("\nFull ranking (most central first):")
+        lines.append(df[show].to_string(index=False))
+    with pd.option_context("display.width", 200,
+                           "display.float_format", lambda v: f"{v:,.1f}"):
+        lines.append("\nBackbone-7 placement (rank out of 49 per metric; 1 = most central):")
+        lines.append(bb[rank_show].to_string(index=False))
+    lines.append(f"\nSite 37: out-strength rank {r37['rank_out_strength']}/49, "
+                 f"in-strength rank {r37['rank_in_strength']}/49, "
+                 f"betweenness rank {r37['rank_betweenness']}/49, "
+                 f"pagerank rank {r37['rank_pagerank']}/49, "
+                 f"avg_rank {r37['avg_rank']:.1f}.")
+    report = "\n".join(lines)
+    print(report)
+
+    RUNS_DIR.mkdir(exist_ok=True)
+    tag = "selfloops_on" if self_loops else "selfloops_off"
+    csv_out = RUNS_DIR / f"network_metrics_all49_matrix{matrix_id}_{tag}.csv"
+    txt_out = RUNS_DIR / f"network_ranking_matrix{matrix_id}_{tag}.txt"
+    df.to_csv(csv_out, index=False)              # rows already sorted by avg_rank
+    txt_out.write_text(report + "\n")
+    print(f"\n[save] ordered metrics CSV  -> {csv_out}")
+    print(f"[save] readable ranking TXT -> {txt_out}\n")
     return df
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--matrix",
-        choices=MATRIX_FILES.keys(),
-        default="1",
-        help="Which connectivity matrix to use (1 or 2)",
-    )
+    parser.add_argument("--matrix", choices=["1", "2", "both"], default="both")
+    parser.add_argument("--self-loops", choices=["on", "off"], default="on",
+                        help="Include the diagonal (self-recruitment) in spectral "
+                             "metrics. Default on (canonical model).")
     args = parser.parse_args()
 
-    RUNS_DIR.mkdir(exist_ok=True)
-
-    print("=" * 80)
-    print(f"NETWORK ANALYSIS ON CORE SITES (matrix {args.matrix})")
-    print("=" * 80)
-
-    # 1) Load connectivity
-    labels, P = load_connectivity(args.matrix)
-    print(f"[load] Matrix {args.matrix}: {len(labels)} sites after dropping {UNWANTED}")
-
-    # 2) Build graph
-    G = build_graph(labels, P)
-    print(f"[graph] Nodes: {G.number_of_nodes()}, Edges: {G.number_of_edges()}")
-
-    # 3) Compute metrics on full network
-    df_all = compute_metrics(G)
-
-    # 4) Filter to the 23-core sites
-    core_set = set(CORE_23)
-    df_core = df_all[df_all["site_id"].isin(core_set)].copy()
-    df_core = df_core.sort_values("avg_rank")
-
-    # 5) Pick top 7 "super-core" sites by avg_rank
-    df_core7 = df_core.head(23).copy()
-
-    # Save outputs
-    out_all = RUNS_DIR / f"network_metrics_all_matrix{args.matrix}.csv"
-    out_core = RUNS_DIR / f"network_metrics_core23_matrix{args.matrix}.csv"
-    out_core7 = RUNS_DIR / f"network_core7_matrix{args.matrix}.csv"
-
-    df_all.to_csv(out_all, index=False)
-    df_core.to_csv(out_core, index=False)
-    df_core7.to_csv(out_core7, index=False)
-
-    print(f"[save] all-site metrics  -> {out_all}")
-    print(f"[save] core-23 metrics   -> {out_core}")
-    print(f"[save] top-7 core sites  -> {out_core7}")
-    print("\nTop 7 core sites (by avg_rank across metrics):")
-    print(df_core7[["site_id", "in_strength", "out_strength",
-                    "betweenness", "eigenvector", "pagerank", "avg_rank"]])
+    self_loops = (args.self_loops == "on")
+    matrices = ["1", "2"] if args.matrix == "both" else [args.matrix]
+    for mid in matrices:
+        run_one(mid, self_loops=self_loops)
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
 
 This repository contains the full experimental and modeling framework for the **Oyster Reef Site Selection Problem (ORSSP)** — combining biological ODE simulation, ODE-driven heuristics, and mixed-integer quadratic programming (MIQP). Developed under the supervision of **Prof. Rex Kincaid** (William & Mary), with biological collaborators **Prof. Leah Shaw** (W&M) and **Prof. Rom Lipcius** (VIMS), the project integrates ecological modeling with network optimization to inform data-driven coastal restoration planning.
 
-> A full technical handover report is available in [`docs/Oyster_Project_Handover_Report.pdf`](docs/Oyster_Project_Handover_Report.pdf) (LaTeX source in `docs/Oyster_Project_Handover_Report.tex`). The report includes the full methods, all 18 final designs, the network centrality analysis, and a self-recruitment sensitivity check.
+> A full technical report is available in [`docs/Oyster_Project_Report.pdf`](docs/Oyster_Project_Report.pdf) (LaTeX source in `docs/Oyster_Project_Report.tex`). It includes the full methods, all 18 final designs, the network-centrality analysis, the equilibrium-convergence justification for the `t = 1000` horizon, and a self-recruitment sensitivity check.
 
 ---
 
@@ -21,7 +21,7 @@ Because oyster larvae disperse via tidal currents, each reef's value depends not
 The pipeline has three modeling layers:
 
 1. **JARS metapopulation ODE** (`src/model/jars_ode.py`)
-   Four coupled life stages — juveniles, adults, reef shell, sediment — with larval transport between sites driven by an empirical connectivity matrix `P₁` and an external supply vector `P₀`. The internal larval sum includes each reef's own contribution (self-recruitment). The nonlinear larval-production term `|A|^1.72` makes retentive clusters disproportionately valuable. (Original MATLAB by Prof. Leah Shaw; Python port by Marouf Paul.)
+   Four coupled life stages — juveniles, adults, reef shell, sediment — with larval transport between sites driven by an empirical connectivity matrix `P₁` and an external supply vector `P₀`. The internal larval sum includes each reef's own contribution (self-recruitment). The nonlinear larval-production term `|A|^1.72` makes retentive clusters disproportionately valuable. Model time is in **years** (the JARS rate parameters are annual; Lipcius et al. 2021, Tables 1–2). *(Original MATLAB by Prof. Leah Shaw; Python port by Marouf Paul.)*
 
 2. **ODE-driven heuristics** (`src/opt/`)
    - **Greedy forward** — fast but myopic
@@ -35,6 +35,16 @@ The pipeline has three modeling layers:
    - Variable reef sizing (continuous acreage)
    - Community + sizing (combined real-world constraints)
 
+### Top-level drivers
+
+The project is reproduced through **two** root-level drivers plus a convergence script; the older `run_all.py` / `run_and_validate_all.py` / `run_and_validate_canonical.py` drivers have been consolidated into these:
+
+| Script | Role |
+| --- | --- |
+| `run_everything.py` | Main driver — re-runs all heuristics (constant + realistic `P₀`) and all 8 MIQP variants on both matrices, parallelized, and **self-validates** every objective and the backbone against embedded reference numbers. |
+| `run_extra_experiments.py` | Robustness experiments **E1–E5** (surrogate fidelity, null baseline, budget nesting, A\* / `P₁` sensitivity, self-recruitment sensitivity). |
+| `scripts/settling_time.py` | Equilibrium-convergence check: how fast adult biomass settles and why `t = 1000` is on the steady-state plateau. |
+
 ---
 
 ## 🧩 Repository Structure
@@ -42,26 +52,31 @@ The pipeline has three modeling layers:
 ```
 NetworkAnalysisOysters/
 │
-├── ampl/                              # AMPL models and auto-generated data
+├── ampl/                              # AMPL models + auto-generated data
 │   ├── oyster_quad.mod / .dat         # Base MIQP (select K sites)
 │   ├── oyster_comm.mod / .dat         # MIQP + community minimums
 │   ├── oyster_size.mod / .dat         # MIQP + reef sizing (budget)
-│   └── oyster_comm_size.mod / .dat    # MIQP + sizing + community
+│   └── oyster_comm_size.mod           # MIQP + sizing + community (reads comm.dat + size.dat)
 │
 ├── data/                              # Connectivity matrices
-│   ├── nk_All_060102final_56sites_Model.xlsx   # Matrix 1
-│   └── nk_All_060103final_56sites_Model.xlsx   # Matrix 2
+│   ├── nk_All_060102final_56sites_Model.xlsx   # Matrix 1 (M1, dry year 2002)
+│   └── nk_All_060103final_56sites_Model.xlsx   # Matrix 2 (M2, high-flow year 2003)
+│
+├── docs/
+│   ├── Oyster_Project_Report.tex      # Full technical report (LaTeX source)
+│   └── Oyster_Project_Report.pdf      # Compiled report
 │
 ├── figures/                           # Generated PNGs (strategy comparison, centrality, …)
 │
-├── runs/                              # All CSV / TXT outputs
-│   ├── *_sites_matrix{1,2}.csv        # Selected sites (and reef sizes where applicable)
+├── runs/                              # Generated CSV / TXT / JSON outputs (gitignored)
+│   ├── *_sites_matrix{1,2}.csv        # Selected sites (+ reef sizes where applicable)
 │   ├── *_summary_matrix{1,2}.txt      # Objective values and solver logs
 │   ├── network_metrics_*.csv          # Per-site centrality metrics
-│   ├── oyster_index_mapping_matrix{1,2}.csv   # AMPL index ↔ site label table
-│   └── validation_summary.csv         # Produced by validate.py
+│   ├── oyster_index_mapping_matrix{1,2}.csv   # AMPL index ↔ site label table (INPUT — tracked)
+│   ├── run_everything.json            # written by run_everything.py
+│   └── extra_experiments.json/.txt    # written by run_extra_experiments.py
 │
-├── scripts/                           # Entry-point CLIs
+├── scripts/                           # Entry-point + auxiliary CLIs
 │   ├── prepare_miqp_data.py           # Excel → AMPL .dat (self-recruitment kept)
 │   ├── run_greedy.py                  # Greedy heuristic
 │   ├── run_greedy_then_local.py       # Greedy + 1-swap local search
@@ -70,25 +85,26 @@ NetworkAnalysisOysters/
 │   ├── run_miqp_comm.py               # MIQP + communities
 │   ├── run_miqp_size.py               # MIQP + reef sizing
 │   ├── run_miqp_comm_size.py          # MIQP + community + sizing
-│   ├── network_core_analysis.py       # Centrality on the backbone sites
-│   └── make_figures.py                # Plots
+│   ├── network_core_analysis.py       # Centrality on the candidate / backbone sites
+│   ├── settling_time.py               # Equilibrium-convergence check (t = 1000 horizon)
+│   ├── make_figures.py                # Paper figures
+│   ├── validate_miqp_with_ode.py      # Score MIQP sets under the true ODE
+│   ├── compare_greedy_backward.py     # Cross-check greedy vs stingy
+│   ├── check_ampl_env.py              # Verify AMPL + Gurobi on PATH
+│   └── generate_presentation*.py      # Slide-deck builders (+ minor dev/test scripts)
 │
-├── src/                               # Core algorithms and biological model
+├── src/                               # Core algorithms + biological model
 │   ├── model/jars_ode.py              # JARS ODE, CANDIDATE_SITES, P0 setter
 │   ├── opt/
 │   │   ├── evaluator.py               # ODE scoring of any site set
 │   │   ├── greedy.py                  # Forward selection
 │   │   ├── local_search.py            # 1-for-1 swap improver
 │   │   └── backward.py                # Reverse elimination
-│   ├── utils/io_utils.py              # CSV/TXT writers
-│   └── viz/plots.py                   # Figure helpers
+│   ├── utils/                         # IO helpers
+│   └── viz/                           # Figure helpers
 │
-├── docs/
-│   ├── Oyster_Project_Handover_Report.tex   # Full technical report (LaTeX source)
-│   └── Oyster_Project_Handover_Report.pdf   # Compiled report
-│
-├── run_everything.py                  # One-pass driver: all heuristics + all MIQP, parallelized
-├── validate.py                        # Independent re-validation harness
+├── run_everything.py                  # Main driver: all heuristics + all MIQP, parallel, self-validating
+├── run_extra_experiments.py           # Robustness experiments E1–E5
 ├── requirements.txt                   # Python dependencies
 └── README.md                          # This file
 ```
@@ -138,7 +154,7 @@ The full table for each matrix is auto-saved to `runs/oyster_index_mapping_matri
   ```
   Looking up indices `33, 36, 44` in the mapping CSV shows that `C1` actually contains site labels `{42, 48, 56}`.
 - **Python runner scripts** (`scripts/run_miqp*.py`) translate AMPL indices back to site labels before writing CSVs, so the output you read is always in biological labels.
-- **The validation harness** (`validate.py`) operates entirely in site labels.
+- **The drivers** (`run_everything.py`, `run_extra_experiments.py`) operate in site labels throughout.
 
 **Rule of thumb:** if you're looking at a `.dat` file, the integers are indices. Everywhere else, they're site labels.
 
@@ -161,13 +177,13 @@ AMPL + Gurobi need to be on PATH for the MIQP scripts. Verify with:
 python -m scripts.check_ampl_env
 ```
 
-The ODE heuristics (greedy, swap, stingy) work with just Python — no AMPL needed.
+The ODE heuristics (greedy, swap, stingy) and the convergence check work with just Python — no AMPL needed.
 
 ---
 
 ## 🚀 Running the Models
 
-All scripts accept `--matrix 1` or `--matrix 2` to choose the connectivity matrix. Outputs are written to `runs/` and figures to `figures/`.
+All MIQP/centrality scripts accept `--matrix 1` or `--matrix 2`. Outputs are written to `runs/` and figures to `figures/`.
 
 ### ODE-driven heuristics (constant P₀)
 
@@ -186,7 +202,7 @@ python -m scripts.run_backward
 | `python -m scripts.run_miqp_size      --matrix 1` | + variable reef sizing |
 | `python -m scripts.run_miqp_comm_size --matrix 1` | + community + sizing |
 
-Each MIQP variant solves to proven global optimality (nonconvex bilinear objective, `nonconvex=2`) in well under a second; greedy / stingy take ~4–5 minutes; greedy + local swap takes ~15–30 minutes (the ODE is the bottleneck). `run_everything.py` parallelizes the per-candidate ODE evaluations across CPU cores and runs everything in one pass.
+Each MIQP variant solves to proven global optimality (nonconvex bilinear objective, `nonconvex=2`, MIP gap `1e-9`) in well under a second; greedy / stingy take ~4–5 minutes; greedy + local swap takes ~15–30 minutes (the ODE is the bottleneck). `run_everything.py` parallelizes the per-candidate ODE evaluations across CPU cores and runs everything in one pass.
 
 ### Network centrality and figures
 
@@ -211,10 +227,10 @@ python -m scripts.make_figures
 
 ## 📊 Key Results
 
-> The MIQP surrogate retains self-recruitment (the connectivity diagonal), matching the JARS ODE. Zeroing it is reported only as a sensitivity check in the handover report; it leaves the base/size selections unchanged and the cross-matrix and 7-site backbones unaffected.
+> The MIQP surrogate retains self-recruitment (the connectivity diagonal), matching the JARS ODE. Zeroing it is reported only as a sensitivity check; it leaves the base/size selections unchanged and the cross-matrix and 7-site backbones unaffected.
 
 ### Validation
-All ODE scores reported in the handover were independently re-derived with `validate.py`. The ten heuristic scores match the original logs **exactly to six decimal places**.
+`run_everything.py` re-derives every heuristic and MIQP objective and validates it against embedded reference numbers (prints `PASSED / FAILED`). The ten heuristic scores (6 constant-`P₀` + 4 realistic-`P₀`) match the original logs **exactly to six decimal places**.
 
 ### Heuristic scores under constant P₀
 | Matrix | Greedy | Greedy + Swap | Stingy |
@@ -247,63 +263,71 @@ Across all 18 model runs (2 matrices × 4 MIQP variants + 6 constant-P₀ heuris
 
 The 7-site backbone is the practical takeaway: these reefs sit in dense subnetworks (high eigenvector centrality, high PageRank) or act as bridges (high betweenness), and every optimization method we ran selects them. **Any restoration design that omits them is structurally weaker.**
 
+### Surrogate fidelity (run_extra_experiments.py · E1)
+Scored under the true JARS ODE, the unconstrained MIQP selections recover **99.3% (M1)** and **98.9% (M2)** of the biomass attained by the best heuristic search — so the tractable static surrogate closely tracks the far more expensive dynamic model.
+
+### Equilibrium convergence / the `t = 1000` horizon (scripts/settling_time.py)
+Model time is in **years**. Total adult biomass establishes within a few decades — within 1% of equilibrium in roughly **30 yr on M1** and **60 yr on M2** — after which a slow tail set by the sediment compartment (`β = 0.01 yr⁻¹`, ~100-yr timescale) continues. Integrating to `t = 1000` places the reported `F(S)` on its steady-state plateau: extending to `t = 2000` changes `Σ Aₖ` by `< 1e-5` on both matrices.
+
+### Self-recruitment sensitivity (run_extra_experiments.py · E5)
+Zeroing the connectivity diagonal leaves the base/size **selections unchanged** and lowers the base objective by **~7% on M1 (14,785 → 13,692)** and **~4% on M2 (16,447 → 15,807)**. The cross-matrix and 7-site backbones are unaffected.
+
 ---
 
 ## ✅ Reproducing Everything
 
 ```bash
+# 0. Setup + (for MIQP) verify the solver
+pip install -r requirements.txt
+python -m scripts.check_ampl_env
+
 # 1. Generate AMPL data from Excel (self-recruitment / diagonal kept)
 python -m scripts.prepare_miqp_data --matrix 1
 python -m scripts.prepare_miqp_data --matrix 2
 
-# 2. ODE heuristics
-python -m scripts.run_greedy
-python -m scripts.run_greedy_then_local
-python -m scripts.run_backward
+# 2. One-pass: all heuristics (constant + realistic P0) + all 8 MIQP, both
+#    matrices, parallelized, self-validated against the embedded references.
+#    Writes runs/run_everything.json and prints PASSED / FAILED.
+python run_everything.py
 
-# 3. All MIQP variants for both matrices
-for m in 1 2; do
-  python -m scripts.run_miqp           --matrix $m
-  python -m scripts.run_miqp_comm      --matrix $m
-  python -m scripts.run_miqp_size      --matrix $m
-  python -m scripts.run_miqp_comm_size --matrix $m
-done
+# 3. Robustness experiments E1-E5 (surrogate fidelity, null baseline, budget
+#    nesting, A* / P1 sensitivity, self-recruitment sensitivity).
+#    Writes runs/extra_experiments.json (+ .txt mirror).
+python run_extra_experiments.py
 
-# 4. Network centrality + figures
+# 4. Equilibrium-convergence check (justifies the t = 1000 horizon)
+python -m scripts.settling_time
+
+# 5. Network centrality + figures
 python -m scripts.network_core_analysis --matrix 1
 python -m scripts.network_core_analysis --matrix 2
 python -m scripts.make_figures
-
-# 5. Independent re-validation (re-runs ODE on every reported design,
-#    recomputes all backbone intersections from scratch)
-python validate.py
-
-# (Optional) one-pass driver that runs all heuristics + all MIQP and self-validates
-python run_everything.py
 ```
 
-`validate.py` writes `runs/validation_summary.csv` and `runs/validation_network_core_matrix{1,2}.csv`. Every number in the handover report came from that script — if you're reviewing or extending the work, run it first.
+For granular runs, the individual `scripts/run_*` entry points above produce the same per-model CSVs in `runs/`. `run_everything.py` accepts `--skip-miqp` / `--skip-heur` to run only one layer, and `--workers N` to cap CPU usage.
+
+**Validation flow at a glance:** `run_everything.py` checks every heuristic and MIQP objective + the backbone; `run_extra_experiments.py` checks the robustness claims (E1–E5); `scripts/settling_time.py` checks equilibrium convergence. If you're reviewing or extending the work, run those three first.
 
 ---
 
 ## 🧭 Limitations and Next Steps
 
-- **Equilibrium-only objective.** `F(S)` is the sum of adult biomass at `t = 1000`. Transients and resilience to shocks are not considered.
+- **Equilibrium-only objective.** `F(S)` is the sum of adult biomass at `t = 1000` (model years). Transients and resilience to shocks are not considered.
 - **Fixed JARS parameters.** No robustness analysis over parameter uncertainty.
-- **Surrogate uses a fixed A\*.** A state-dependent surrogate would tighten alignment with the ODE, at the cost of solvability.
+- **Surrogate uses a fixed A\*.** A state-dependent surrogate would tighten alignment with the ODE, at the cost of solvability. (A\* sets only the objective scale, not the selection — see E4.)
 - **Exogenous communities.** The five regions come from geography, not from the connectivity graph. Data-driven community detection on `P₁` is a natural extension.
 
 Suggested next experiments: robust/stochastic MIQP, multi-objective Pareto frontiers, phased multi-period restoration, and coupling with non-larval ecosystem services.
 
-See §7 of the handover report for the full discussion.
+See the discussion section of the technical report for the full treatment.
 
 ---
 
 ## 📚 References
 
+- Lipcius, R. N., Zhang, Y., Zhou, J., Shaw, L. B., & Shi, J. (2021). *Modeling oyster reef restoration: larval supply and reef geometry jointly determine population resilience and performance.* Frontiers in Marine Science, 8, 677640. (Source of the JARS model and parameter table.)
 - Gurobi Optimization, LLC. *Gurobi Optimizer Reference Manual.*
-- AMPL: Fourer, R., Gay, D.M., Kernighan, B.W. *AMPL: A Modeling Language for Mathematical Programming.*
-- JARS dynamics: based on metapopulation ODE work by Prof. Leah Shaw (W&M).
+- AMPL: Fourer, R., Gay, D. M., Kernighan, B. W. *AMPL: A Modeling Language for Mathematical Programming.*
 
 ---
 
@@ -313,7 +337,7 @@ See §7 of the handover report for the full discussion.
 **Advisor:** Prof. Rex Kincaid (Mathematics, William & Mary)
 **Collaborators:** Prof. Leah Shaw (W&M), Prof. Rom Lipcius (Virginia Institute of Marine Science)
 
-This project was conducted as part of an M.S. research in Computational Operations Research at William & Mary, focused on computational optimization for marine ecosystem restoration.
+This project was conducted as part of an M.S. in Computational Operations Research at William & Mary, focused on computational optimization for marine ecosystem restoration.
 
 **Contact:**
 📧 mmarouf@wm.edu / maroufpaul2@gmail.com (post-graduation)

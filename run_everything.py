@@ -3,7 +3,7 @@
 run_everything.py  --  run ALL models (ODE heuristics + integer programs) with
 self-recruitment KEPT (canonical), parallelized, and validate every output.
 
-Drop at the REPO ROOT and run:   python run_everything.py
+python run_everything.py
   optional flags:
     --skip-miqp        only run the heuristics
     --skip-heur        only run the integer programs

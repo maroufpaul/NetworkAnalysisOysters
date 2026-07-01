@@ -20,31 +20,27 @@
 #   Final Report W912HZ-23-02-0015.
 #
 # Original MATLAB by Prof. Leah B. Shaw (William & Mary); Python port by Marouf Paul.
+#
+# NOTE: data (the candidate list, the realistic-P0 vector) and the run knobs
+# (P1SCALING, CONST_P0, MU, TMAX, initial conditions, default connectivity file)
+# now live in config.py. They are re-exported here so existing imports such as
+# `from src.model.jars_ode import CANDIDATE_SITES` keep working unchanged.
 
 import numpy as np
 import pandas as pd
-from pathlib import Path
 from scipy.integrate import solve_ivp
 
-# candidate sites (professor shaw) removed the following sites: 8, 13, 14, 22, 23, 25, 34, 43, 45, 46
-CANDIDATE_SITES = np.array([
-    1, 3, 4, 5, 6, 7,  
-    9, 10, 11, 12,
-    15, 16, 17, 18, 19, 20, 21,
-    24, 26, 27, 28, 29, 30, 31, 32, 33,
-    35, 36, 37, 38, 39, 40, 41, 42,
-    44, 47, 48, 49, 50, 51, 52, 53, 54,
-    55, 56, 57, 58, 59, 60
-], dtype=int)
+import config
 
-DATA_DIR = Path(__file__).resolve().parents[2] / "data"
-DEFAULT_CONNECTIVITY_FILE = DATA_DIR / "nk_All_060102final_56sites_Model.xlsx"  # "nk_All_060102final_56sites_Model.xlsx"
+# Re-exported for backward compatibility.
+CANDIDATE_SITES = config.CANDIDATE_SITES
+DATA_DIR = config.DATA_DIR
+DEFAULT_CONNECTIVITY_FILE = config.MATRICES[config.DEFAULT_MATRIX]
 
 
-
-def load_connectivity(path: str | Path | None = None):
+def load_connectivity(path=None):
     """
-    Load the big 56-site connectivity Excel and return:
+    Load a 56-site connectivity Excel and return:
       connectivity (numpy array)
       key_all (site labels as ints)
     """
@@ -59,8 +55,7 @@ def load_connectivity(path: str | Path | None = None):
 
 def sitetoindex(key: np.ndarray, site_set: np.ndarray) -> np.ndarray:
     """
-    Given key (list of all site labels in the matrix)
-    and a site_set (subset of labels),
+    Given key (all site labels in the matrix) and a site_set (subset of labels),
     return the indices in key that correspond to site_set.
     """
     index = []
@@ -73,26 +68,15 @@ def sitetoindex(key: np.ndarray, site_set: np.ndarray) -> np.ndarray:
 
 def setP0(sites: np.ndarray) -> np.ndarray:
     """
-    Realistic external larvae vector (copied from  original code).
-     just index into it using the site labels.
+    Realistic external-larvae vector, indexed by site label (1-based).
+    The vector itself lives in config.P0_REALISTIC.
     """
-    allP0 = np.array([
-        400, 400, 400, 400, 400, 400, 200, 200, 200, 100, 100, 100,
-        100, 100, 100, 100, 100, 400, 400, 200, 200, 400, 400, 400,
-        200, 100, 200, 100, 100, 200, 200, 100, 100, 100, 400, 200,
-        200, 400, 400, 100, 100, 400, 400, 100, 400, 400, 200, 400,
-        200, 100, 100, 100, 200, 100, 400, 400, 400, 100, 100, 400,
-        100, 400, 400, 400, 100, 400, 400, 400, 400, 400, 200, 400
-    ])
-    # sites are 1-based in the original data
-    P0 = allP0[sites - 1]
-    return P0
+    return config.P0_REALISTIC[sites - 1]
 
 
 def odesys(t, v, P0, P1, mu):
     """
-    The JARS ODE system .
-    v is a flat vector with blocks: J, A, R, S
+    The JARS ODE system. v is a flat vector with blocks: J, A, R, S.
     """
     Npatch = len(P0)
     x = v.reshape((4, Npatch)).T  # shape (Npatch, 4)
@@ -101,7 +85,7 @@ def odesys(t, v, P0, P1, mu):
     R = x[:, 2]
     S = x[:, 3]
 
-    # parameters (same as your file)
+    # demographic parameters (Lipcius et al. 2021, Table 2)
     aj = 0.5
     aa = 0.9
     h = 20
@@ -128,7 +112,6 @@ def odesys(t, v, P0, P1, mu):
     beta = 0.01
     C = 0.02
 
-    # functions from your original
     dj = aj * A + R - S
     da = aa * A + R - S
     fj = 1.0 / (1 + np.exp(-h * dj))
@@ -138,8 +121,8 @@ def odesys(t, v, P0, P1, mu):
     Cg = C * g
     F = F0 * Cg / y0 * np.exp((y0 - Cg) / y0)
 
-    # larval input (P1 is internal)
-    larvalinput = (P0 + P1.T @ (np.abs(A)**1.72)) * L * fj
+    # larval input (P1 is internal connectivity)
+    larvalinput = (P0 + P1.T @ (np.abs(A)**config.ALPHA)) * L * fj
 
     dJ = np.minimum(larvalinput, m * KJ * np.ones(Npatch)) - m * J
     dA = (m * alpha * J + phi * A * fa * (1 - A / KA) -
@@ -147,19 +130,17 @@ def odesys(t, v, P0, P1, mu):
     dR = mu * A * fa + epsilon * A * (1 - fa) - gamma * R
     dS = -beta * S + Cg * np.exp(-F * A / Cg)
 
-    dv = np.concatenate([dJ, dA, dR, dS])
-    return dv
+    return np.concatenate([dJ, dA, dR, dS])
 
 
-def run_full_jars_on_subset(site_labels: list[int] | np.ndarray,
-                            tmax: int = 1000,
-                            P1scaling: float = 0.5,
+def run_full_jars_on_subset(site_labels,
+                            tmax: int = config.TMAX,
+                            P1scaling: float = config.P1SCALING,
                             P0_mode: str = "constant",
-                            consP0: float = 170.0) -> float:
+                            consP0: float = config.CONST_P0) -> float:
     """
     Convenience helper: load connectivity, restrict to given site_labels,
-    run the ODE to tmax, return total adult biomass.
-    This will be useful for quick tests and for notebooks.
+    run the ODE to tmax, return total adult biomass. Handy for quick checks.
     """
     connectivity, key_all = load_connectivity()
     site_labels = np.array(site_labels, dtype=int)
@@ -171,7 +152,6 @@ def run_full_jars_on_subset(site_labels: list[int] | np.ndarray,
     key_subset = key_all[idx]
     Npatch = len(key_subset)
 
-    # external larvae
     if P0_mode == "constant":
         P0 = consP0 * np.ones(Npatch)
     elif P0_mode == "realistic":
@@ -179,15 +159,13 @@ def run_full_jars_on_subset(site_labels: list[int] | np.ndarray,
     else:
         P0 = np.zeros(Npatch)
 
-    mu = 0.4 * np.ones(Npatch)
+    mu = config.MU * np.ones(Npatch)
 
-    # initial conditions
-    J0, A0, R0, S0 = 0, 0.2, 0.3, 0
     v0 = np.zeros(4 * Npatch)
-    v0[0:Npatch] = J0
-    v0[Npatch:2*Npatch] = A0
-    v0[2*Npatch:3*Npatch] = R0
-    v0[3*Npatch:4*Npatch] = S0
+    v0[0:Npatch]          = config.IC["J"]
+    v0[Npatch:2*Npatch]   = config.IC["A"]
+    v0[2*Npatch:3*Npatch] = config.IC["R"]
+    v0[3*Npatch:4*Npatch] = config.IC["S"]
 
     sol = solve_ivp(lambda t, v: odesys(t, v, P0, P1, mu),
                     [0, tmax], v0, method="RK45", rtol=1e-6)

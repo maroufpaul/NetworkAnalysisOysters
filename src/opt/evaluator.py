@@ -2,6 +2,7 @@
 
 from typing import Sequence
 import numpy as np
+import config
 from src.model.jars_ode import (
     odesys,
     sitetoindex,
@@ -14,10 +15,10 @@ def evaluate_subset(
     site_labels: Sequence[int],
     connectivity_data: np.ndarray,
     key_all: np.ndarray,
-    tmax: int = 1000,
-    P1scaling: float = 0.5,
+    tmax: int = config.TMAX,
+    P1scaling: float = config.P1SCALING,
     P0_mode: str = "realistic",
-    consP0: float = 170.0,
+    consP0: float = config.CONST_P0,
 ) -> float:
     """
     Core operation: run the JARS ODE on *just* the given site labels and
@@ -67,10 +68,10 @@ def evaluate_subset(
     else:
         P0 = np.zeros(n)
 
-    mu = 0.4 * np.ones(n)
+    mu = config.MU * np.ones(n)
 
     # initial conditions (same as your original)
-    J0, A0, R0, S0 = 0.0, 0.2, 0.3, 0.0
+    J0, A0, R0, S0 = config.IC["J"], config.IC["A"], config.IC["R"], config.IC["S"]
     v0 = np.zeros(4 * n)
     v0[0:n] = J0
     v0[n:2*n] = A0

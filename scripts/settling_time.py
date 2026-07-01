@@ -25,6 +25,8 @@ import argparse
 import numpy as np
 from scipy.integrate import solve_ivp
 
+import config
+
 # Single source of truth: reuse the model code already in the repo.
 from src.model.jars_ode import (
     load_connectivity,
@@ -132,10 +134,7 @@ def main():
         report_matrix(name, connectivity, key_all)
     else:
         # default file names in data/ — edit here if yours differ
-        files = {
-            "M1": "data/nk_All_060102final_56sites_Model.xlsx",
-            "M2": "data/nk_All_060103final_56sites_Model.xlsx",
-        }
+        files = {k: str(v) for k, v in config.MATRICES.items()}
         for name, path in files.items():
             connectivity, key_all = load_connectivity(path)
             report_matrix(name, connectivity, key_all)

@@ -1,64 +1,20 @@
-# ---- Python basics ----
+# Python
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
-*.so
 *.egg-info/
-.eggs/
-*.log
-
-# Virtual environments
 .venv/
 venv/
-env/
-ENV/
-
-# Jupyter
 .ipynb_checkpoints/
-*.ipynb_checkpoints
 
-# VS Code & editor fluff
-.vscode/
-*.code-workspace
+# Office temp/lock files
+~$*
 
-# OS
-.DS_Store
-Thumbs.db
+# Generated run outputs — everything in runs/ EXCEPT the tracked index mappings
+runs/*
+!runs/oyster_index_mapping_matrix1.csv
+!runs/oyster_index_mapping_matrix2.csv
 
-# Builds / dist
-build/
-dist/
-*.bak
-*.tmp
-
-# Solver / AMPL artifacts
-*.nl
-*.sol
-*.mst
-*.bam
-*.out
-*.walk
-*.fix
-*.gz
-# (AMPL/solver logs are already covered by *.log above)
-
-# ---- Project run artifacts (regenerable outputs; not source) ----
-# Timestamped greedy search dumps (dozens accumulate; all reproducible)
-runs/greedy_*_sites.csv
-runs/greedy_*_summary.txt
-runs/greedy_*_sites.png
-# Validation / experiment outputs written by the driver scripts
-runs/*.json
-# NOTE: keep runs/oyster_index_mapping_matrix*.csv tracked if the MIQP
-# drivers read it as an input (do NOT add a blanket runs/*.csv rule).
-
-# Optional: ignore large raw data if you don't want it tracked
-# (Keep the Excel model file if you want the repo to be runnable)
-# /data/raw/*
-# *.csv  # comment this out if you want CSVs tracked
-
-# Plots and generated images (if auto-generated)
-# /figures/
-# *.png
-# *.pdf
+# Generated AMPL data (regenerate with `python -m scripts.prepare_data`)
+ampl/oyster_quad.dat
+ampl/oyster_comm.dat
+ampl/oyster_size.dat

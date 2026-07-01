@@ -29,30 +29,33 @@ import json, time, sys
 from pathlib import Path
 import numpy as np
 
-ROOT     = Path(__file__).resolve().parent
-DATA_DIR = ROOT / "data"
-RUNS_DIR = ROOT / "runs"; RUNS_DIR.mkdir(exist_ok=True)
-MATRICES = {"M1": DATA_DIR / "nk_All_060102final_56sites_Model.xlsx",
-            "M2": DATA_DIR / "nk_All_060103final_56sites_Model.xlsx"}
+ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT))
+import config
 
-TMAX, P1SCALING, CONST_P0, A_STAR, ALPHA = 1000, 0.5, 170.0, 0.05675, 1.72
-UNWANTED = [66,67,68,69,70,71,72]
+RUNS_DIR = config.RUNS_DIR; RUNS_DIR.mkdir(exist_ok=True)
+MATRICES = config.MATRICES
+TMAX, P1SCALING, CONST_P0 = config.TMAX, config.P1SCALING, config.CONST_P0
+A_STAR, ALPHA = config.A_STAR, config.ALPHA
+UNWANTED = config.UNWANTED
 
 from src.model.jars_ode import load_connectivity, CANDIDATE_SITES
 from src.opt.evaluator import evaluate_subset
 from scipy.optimize import milp, LinearConstraint, Bounds
 from scipy.sparse import lil_matrix
 
-# ---- diagonal-zeroed MIQP sets (validated) ----
+# ---- canonical MIQP selections (self-recruitment KEPT; corrected 49-site
+#      communities). Base/+Size sets are community-independent; +Comm /
+#      +Comm+Size reflect the corrected partition (+Comm+Size == +Comm set). ----
 MIQP_SETS = {
  "M1 Base":[10,11,12,15,16,17,20,26,27,28,29,31,32,33,36,37,40,41,44,49,51,52,53,54,59],
- "M1 +Comm":[10,12,15,16,21,26,27,28,29,31,32,33,37,40,41,42,44,47,48,49,51,52,53,54,59],
+ "M1 +Comm":[1,10,12,15,16,17,21,26,28,29,31,32,33,37,40,41,42,44,47,49,51,52,53,54,59],
  "M1 +Size":[10,11,12,15,16,17,20,26,27,28,29,31,32,33,36,37,40,41,44,49,51,52,53,54,59],
- "M1 +Comm+Size":[10,11,12,15,16,21,27,28,29,31,32,33,37,40,41,42,44,47,49,51,52,53,54,56,59],
+ "M1 +Comm+Size":[1,10,12,15,16,17,21,26,28,29,31,32,33,37,40,41,42,44,47,49,51,52,53,54,59],
  "M2 Base":[10,11,12,15,16,17,20,26,27,28,29,31,32,33,36,37,40,41,44,49,51,52,53,54,59],
- "M2 +Comm":[10,11,12,15,16,17,21,27,28,29,31,32,33,36,37,40,41,42,47,48,49,51,52,53,59],
+ "M2 +Comm":[10,11,12,15,16,17,18,19,27,28,29,31,32,33,36,37,40,41,42,47,49,51,52,53,59],
  "M2 +Size":[10,11,12,15,16,17,20,26,27,28,29,31,32,33,36,37,40,41,44,49,51,52,53,54,59],
- "M2 +Comm+Size":[10,11,12,15,16,21,26,27,28,29,31,32,33,36,37,40,41,42,47,48,49,51,52,53,59],
+ "M2 +Comm+Size":[10,11,12,15,16,17,18,19,27,28,29,31,32,33,36,37,40,41,42,47,49,51,52,53,59],
 }
 # heuristic optima (constant P0) used as the "best known" ODE reference
 HEUR_BEST = {  # matrix -> (sites, ODE score)
@@ -102,7 +105,7 @@ def jaccard(a,b):
 def main():
     t0=time.time()
     out={"meta":{"TMAX":TMAX,"P1SCALING":P1SCALING,"CONST_P0":CONST_P0,
-                 "A_STAR":A_STAR,"ALPHA":ALPHA,"diagonal":"ZEROED"}}
+                 "A_STAR":A_STAR,"ALPHA":ALPHA,"diagonal":"KEPT (E1 scores sets under the ODE)"}}
     CONN={m:load_connectivity(p) for m,p in MATRICES.items()}
 
     # ---------- E1: surrogate fidelity (MIQP sets scored under the ODE) ----------

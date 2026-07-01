@@ -2,6 +2,7 @@
 
 import time
 import numpy as np
+import config
 from src.model.jars_ode import load_connectivity, CANDIDATE_SITES
 from src.opt.evaluator import evaluate_subset
 from src.utils.io_utils import save_greedy_result  # NEW
@@ -9,10 +10,10 @@ from src.utils.io_utils import save_greedy_result  # NEW
 
 def greedy_select_sites(
     k: int = 25,
-    tmax: int = 200,
-    P1scaling: float = 0.5,
+    tmax: int = config.TMAX,
+    P1scaling: float = config.P1SCALING,
     P0_mode: str = "realistic",
-    consP0: float = 170.0,
+    consP0: float = config.CONST_P0,
     save: bool = False,             # NEW
     save_name: str | None = None,   # NEW
 ):

@@ -24,16 +24,13 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 
-ROOT = Path(__file__).resolve().parents[1]
-DATA_DIR = ROOT / "data"
-RUNS_DIR = ROOT / "runs"
+import config
 
-UNWANTED = [66, 67, 68, 69, 70, 71, 72]
+ROOT = config.ROOT
+DATA_DIR = config.DATA_DIR
+RUNS_DIR = config.RUNS_DIR
 
-MATRIX_FILES = {
-    "1": "nk_All_060102final_56sites_Model.xlsx",
-    "2": "nk_All_060103final_56sites_Model.xlsx",
-}
+UNWANTED = config.UNWANTED
 
 # Seven sites selected by every optimized design (the global backbone).
 BACKBONE_7 = [10, 31, 37, 40, 41, 49, 53]
@@ -45,7 +42,7 @@ RANK_METRICS = ["out_strength", "in_strength", "betweenness", "eigenvector", "pa
 def load_connectivity(matrix_id: str):
     """Load raw connectivity for matrix_id, drop 66-72, return (labels, P)
     with P[i, j] = larval flow from donor i to receiver j."""
-    excel_path = DATA_DIR / MATRIX_FILES[matrix_id]
+    excel_path = config.MATRICES[config.matrix_key(matrix_id)]
     arr = pd.read_excel(excel_path, header=None).values
 
     labels = arr[0, 1:].astype(int)

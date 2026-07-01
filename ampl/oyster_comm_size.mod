@@ -33,6 +33,10 @@ param U{N} >= 0 default 50;       # Maximum reef size (acres) per site
 param TotReefSize > 0;            # Total area budget (acres), e.g., 1000
 param Sbar > 0 default 20;        # Scaling factor for size normalization
 
+# Community minimums (supplied by oyster_comm.dat; defaults match config)
+param rmin1 default 2; param rmin2 default 5; param rmin3 default 3;
+param rmin4 default 2; param rmin5 default 3;
+
 
 # DECISION VARIABLES
 
@@ -72,23 +76,23 @@ subject to PickK:
 # ----------------------------------------------------------------------------
 
 subject to Community1_Min:
-    sum {i in C1} x[i] >= 2;
+    sum {i in C1} x[i] >= rmin1;
 # Community 1 must have at least 2 sites
 
 subject to Community2_Min:
-    sum {i in C2} x[i] >= 5;
+    sum {i in C2} x[i] >= rmin2;
 # Community 2 (largest) must have at least 5 sites
 
 subject to Community3_Min:
-    sum {i in C3} x[i] >= 3;
+    sum {i in C3} x[i] >= rmin3;
 # Community 3 must have at least 3 sites
 
 subject to Community4_Min:
-    sum {i in C4} x[i] >= 2;
+    sum {i in C4} x[i] >= rmin4;
 # Community 4 must have at least 2 sites
 
 subject to Community5_Min:
-    sum {i in C5} x[i] >= 3;
+    sum {i in C5} x[i] >= rmin5;
 # Community 5 must have at least 3 sites
 
 # Total minimums: 2+5+3+2+3 = 15 sites required by communities

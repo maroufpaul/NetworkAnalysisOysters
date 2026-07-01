@@ -1,11 +1,11 @@
-numpy
-pandas
-scipy
-openpyxl
-pathlib
-matplotlib
-jupyter
-seaborn
-amplpy
-networkx
+# Core (ODE heuristics, prep, network analysis, figures) — pure Python, no solver.
+numpy>=1.24
+pandas>=2.0
+scipy>=1.11
+openpyxl>=3.1        # read the .xlsx connectivity / community files
+networkx>=3.1        # centrality analysis
+matplotlib>=3.7      # figures
+seaborn>=0.12        # figures
 
+# MIQP layer only — needs AMPL + a licensed Gurobi on PATH.
+amplpy>=0.14

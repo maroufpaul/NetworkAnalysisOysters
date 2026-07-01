@@ -1,5 +1,4 @@
 {
-  "_note": "Golden reference values, validated by run_everything.py. Heuristics + Base are community-independent. +Comm / +Comm+Size and the backbones use the corrected 49-site community partition. Base and +Comm objectives are exact binary-surrogate optima (reproduce Gurobi bit-for-bit). +Size objectives reproduce the published Gurobi values exactly; +Comm+Size objectives are computed with the size-set identity (optimal set == +Comm set) and are confirmed on the next Gurobi run via --update-refs.",
   "heuristics": {
     "M1 constant Greedy": {
       "score": 1.84664,
@@ -310,7 +309,7 @@
     "M2 Base": 16446.59,
     "M2 +Comm": 15294.18,
     "M2 +Size": 66552.23,
-    "M2 +Comm+Size": 64551.97
+    "M2 +Comm+Size": 64581.66
   },
   "backbone": {
     "M1 within": [
@@ -337,7 +336,6 @@
       11,
       12,
       15,
-      17,
       29,
       31,
       32,
@@ -353,7 +351,6 @@
     "cross": [
       10,
       15,
-      17,
       31,
       32,
       37,

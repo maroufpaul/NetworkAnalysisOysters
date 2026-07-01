@@ -39,7 +39,7 @@ The pipeline has three modeling layers:
 
 ### Top-level drivers
 
-Every parameter is read from `config.py`, and every objective / backbone is validated against `references.json`. The project is reproduced through **two** root-level drivers plus a convergence script; the older `run_all.py` / `run_and_validate_all.py` / `run_and_validate_canonical.py` drivers have been consolidated into these:
+Every parameter is read from `config.py`, and every objective / backbone is validated against `references.json`. The project is reproduced through **two** root-level drivers plus a convergence script:
 
 | Script | Role |
 | --- | --- |

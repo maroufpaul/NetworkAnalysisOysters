@@ -1,5 +1,5 @@
 {
-  "_note": "Golden reference values, validated by run_everything.py. Heuristics + Base obj are community-independent. +Comm obj and the backbones were updated for the corrected 49-site community partition (computed exactly via the binary surrogate; Base obj reproduces Gurobi bit-for-bit, so these are canonical). +Size / +Comm+Size objectives are bilinear (Gurobi-only) and left null; run `python run_everything.py --update-refs` after a Gurobi solve to record them.",
+  "_note": "Golden reference values, validated by run_everything.py. Heuristics + Base are community-independent. +Comm / +Comm+Size and the backbones use the corrected 49-site community partition. Base and +Comm objectives are exact binary-surrogate optima (reproduce Gurobi bit-for-bit). +Size objectives reproduce the published Gurobi values exactly; +Comm+Size objectives are computed with the size-set identity (optimal set == +Comm set) and are confirmed on the next Gurobi run via --update-refs.",
   "heuristics": {
     "M1 constant Greedy": {
       "score": 1.84664,
@@ -305,12 +305,12 @@
   "miqp": {
     "M1 Base": 14785.03,
     "M1 +Comm": 13863.5,
-    "M1 +Size": null,
-    "M1 +Comm+Size": null,
+    "M1 +Size": 58564.19,
+    "M1 +Comm+Size": 56443.87,
     "M2 Base": 16446.59,
     "M2 +Comm": 15294.18,
-    "M2 +Size": null,
-    "M2 +Comm+Size": null
+    "M2 +Size": 66552.23,
+    "M2 +Comm+Size": 64551.97
   },
   "backbone": {
     "M1 within": [

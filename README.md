@@ -2,6 +2,8 @@
 
 This repository contains the full experimental and modeling framework for the **Oyster Reef Site Selection Problem (ORSSP)** — combining biological ODE simulation, ODE-driven heuristics, and mixed-integer quadratic programming (MIQP). Developed under the supervision of **Prof. Rex Kincaid** (William & Mary), with biological collaborators **Prof. Leah Shaw** (W&M) and **Prof. Rom Lipcius** (VIMS), the project integrates ecological modeling with network optimization to inform data-driven coastal restoration planning.
 
+The repository is **config-driven** — every parameter lives in [`config.py`](config.py) — and **self-proving** — every result is checked against [`references.json`](references.json) on each run.
+
 > A full technical report is available in [`docs/Oyster_Project_Report.pdf`](docs/Oyster_Project_Report.pdf) (LaTeX source in `docs/Oyster_Project_Report.tex`). It includes the full methods, all 18 final designs, the network-centrality analysis, the equilibrium-convergence justification for the `t = 1000` horizon, and a self-recruitment sensitivity check.
 
 ---
@@ -37,11 +39,11 @@ The pipeline has three modeling layers:
 
 ### Top-level drivers
 
-The project is reproduced through **two** root-level drivers plus a convergence script; the older `run_all.py` / `run_and_validate_all.py` / `run_and_validate_canonical.py` drivers have been consolidated into these:
+Every parameter is read from `config.py`, and every objective / backbone is validated against `references.json`. The project is reproduced through **two** root-level drivers plus a convergence script; the older `run_all.py` / `run_and_validate_all.py` / `run_and_validate_canonical.py` drivers have been consolidated into these:
 
 | Script | Role |
 | --- | --- |
-| `run_everything.py` | Main driver — re-runs all heuristics (constant + realistic `P₀`) and all 8 MIQP variants on both matrices, parallelized, and **self-validates** every objective and the backbone against embedded reference numbers. |
+| `run_everything.py` | Main driver — re-runs all heuristics (constant + realistic `P₀`) and all 8 MIQP variants on both matrices, parallelized, and **self-validates** every objective and the backbone against `references.json`. Supports `--update-refs` to record fresh numbers. |
 | `run_extra_experiments.py` | Robustness experiments **E1–E5** (surrogate fidelity, null baseline, budget nesting, A\* / `P₁` sensitivity, self-recruitment sensitivity). |
 | `scripts/settling_time.py` | Equilibrium-convergence check: how fast adult biomass settles and why `t = 1000` is on the steady-state plateau. |
 
@@ -52,15 +54,23 @@ The project is reproduced through **two** root-level drivers plus a convergence 
 ```
 NetworkAnalysisOysters/
 │
-├── ampl/                              # AMPL models + auto-generated data
+├── config.py                          # Single source of truth for every parameter
+├── references.json                    # Golden expected values (validated each run)
+├── run_everything.py                  # Main driver: all heuristics + all MIQP, parallel, self-validating
+├── run_extra_experiments.py           # Robustness experiments E1–E5
+├── requirements.txt
+├── README.md                          # This file
+│
+├── ampl/                              # AMPL models + AUTO-GENERATED data (via scripts/prepare_data.py)
 │   ├── oyster_quad.mod / .dat         # Base MIQP (select K sites)
-│   ├── oyster_comm.mod / .dat         # MIQP + community minimums
+│   ├── oyster_comm.mod / .dat         # MIQP + community minimums (rmin1..5, from config)
 │   ├── oyster_size.mod / .dat         # MIQP + reef sizing (budget)
 │   └── oyster_comm_size.mod           # MIQP + sizing + community (reads comm.dat + size.dat)
 │
-├── data/                              # Connectivity matrices
+├── data/                              # INPUTS
 │   ├── nk_All_060102final_56sites_Model.xlsx   # Matrix 1 (M1, dry year 2002)
-│   └── nk_All_060103final_56sites_Model.xlsx   # Matrix 2 (M2, high-flow year 2003)
+│   ├── nk_All_060103final_56sites_Model.xlsx   # Matrix 2 (M2, high-flow year 2003)
+│   └── communitiesJune2002.xlsx               # Community membership (partition of the 49 sites)
 │
 ├── docs/
 │   ├── Oyster_Project_Report.tex      # Full technical report (LaTeX source)
@@ -69,15 +79,16 @@ NetworkAnalysisOysters/
 ├── figures/                           # Generated PNGs (strategy comparison, centrality, …)
 │
 ├── runs/                              # Generated CSV / TXT / JSON outputs (gitignored)
+│   ├── oyster_index_mapping_matrix{1,2}.csv   # AMPL index ↔ site label table (INPUT — tracked)
+│   ├── oyster_data_preview_matrix{1,2}.csv    # W preview in site labels
 │   ├── *_sites_matrix{1,2}.csv        # Selected sites (+ reef sizes where applicable)
 │   ├── *_summary_matrix{1,2}.txt      # Objective values and solver logs
-│   ├── network_metrics_*.csv          # Per-site centrality metrics
-│   ├── oyster_index_mapping_matrix{1,2}.csv   # AMPL index ↔ site label table (INPUT — tracked)
+│   ├── network_ranking_matrix{1,2}_selfloops_{on,off}.txt   # Per-site centrality
 │   ├── run_everything.json            # written by run_everything.py
-│   └── extra_experiments.json/.txt    # written by run_extra_experiments.py
+│   └── extra_experiments.json         # written by run_extra_experiments.py
 │
 ├── scripts/                           # Entry-point + auxiliary CLIs
-│   ├── prepare_miqp_data.py           # Excel → AMPL .dat (self-recruitment kept)
+│   ├── prepare_data.py                # Excel + config → ALL AMPL .dat (partition-checked, self-recruitment kept)
 │   ├── run_greedy.py                  # Greedy heuristic
 │   ├── run_greedy_then_local.py       # Greedy + 1-swap local search
 │   ├── run_backward.py                # Stingy backward elimination
@@ -88,39 +99,39 @@ NetworkAnalysisOysters/
 │   ├── network_core_analysis.py       # Centrality on the candidate / backbone sites
 │   ├── settling_time.py               # Equilibrium-convergence check (t = 1000 horizon)
 │   ├── make_figures.py                # Paper figures
-│   ├── validate_miqp_with_ode.py      # Score MIQP sets under the true ODE
 │   ├── compare_greedy_backward.py     # Cross-check greedy vs stingy
-│   ├── check_ampl_env.py              # Verify AMPL + Gurobi on PATH
-│   └── generate_presentation*.py      # Slide-deck builders (+ minor dev/test scripts)
+│   ├── plot_greedy_run.py             # Plot a greedy run
+│   └── check_ampl_env.py              # Verify AMPL + Gurobi on PATH
 │
-├── src/                               # Core algorithms + biological model
-│   ├── model/jars_ode.py              # JARS ODE, CANDIDATE_SITES, P0 setter
-│   ├── opt/
-│   │   ├── evaluator.py               # ODE scoring of any site set
-│   │   ├── greedy.py                  # Forward selection
-│   │   ├── local_search.py            # 1-for-1 swap improver
-│   │   └── backward.py                # Reverse elimination
-│   ├── utils/                         # IO helpers
-│   └── viz/                           # Figure helpers
+├── presentation/                      # Slide deck + slide builders
+│   ├── Oyster_presentation_updated.pptx
+│   ├── generate_presentation.py
+│   └── generate_presentation_figures.py
 │
-├── run_everything.py                  # Main driver: all heuristics + all MIQP, parallel, self-validating
-├── run_extra_experiments.py           # Robustness experiments E1–E5
-├── requirements.txt                   # Python dependencies
-└── README.md                          # This file
+└── src/                               # Core algorithms + biological model
+    ├── __init__.py                    # puts the repo root on sys.path so `import config` works
+    ├── model/jars_ode.py              # JARS ODE; re-exports CANDIDATE_SITES / P0 setter from config
+    ├── opt/
+    │   ├── evaluator.py               # ODE scoring of any site set
+    │   ├── greedy.py                  # Forward selection
+    │   ├── local_search.py            # 1-for-1 swap improver
+    │   └── backward.py                # Reverse elimination
+    ├── utils/                         # IO helpers
+    └── viz/                           # Figure helpers
 ```
 
 ---
 
 ## 🔢 Indexing: Site Labels vs AMPL Indices (Read This First)
 
-There are **two coexisting indexing schemes** in this project, and confusing them is the easiest way to get wrong results.
+There are **two coexisting indexing schemes** in this project, and confusing them is the easiest way to get wrong results. (This is exactly the bug that once left the community file broken — see below.)
 
 ### Biological site labels
 The original integer site IDs from the Excel matrices: `1, 3, 4, 5, …, 60` (sites `66`–`72` are dropped per biological advice; several others in `1`–`60` are absent from the raw data, leaving **49 candidate sites**).
 
 > **Every CSV under `runs/` and every results table in this README and in the report uses these labels.**
 
-The canonical candidate list lives in `src/model/jars_ode.py` as `CANDIDATE_SITES`:
+The canonical candidate list lives in `config.py` as `CANDIDATE_SITES` (re-exported from `src/model/jars_ode.py` for backward compatibility):
 
 ```python
 CANDIDATE_SITES = [
@@ -145,14 +156,16 @@ Inside the AMPL data files (`ampl/oyster_*.dat`), the index set `N` is `0, 1, �
 | 33 | 42 |
 | 48 | 60 |
 
-The full table for each matrix is auto-saved to `runs/oyster_index_mapping_matrix{1,2}.csv` whenever `prepare_miqp_data.py` is run.
+The full table for each matrix is auto-saved to `runs/oyster_index_mapping_matrix{1,2}.csv` whenever `scripts/prepare_data.py` is run.
 
 ### Where this matters
-- **AMPL `.dat` files** use indices. For example, in `oyster_comm.dat`:
+- **AMPL `.dat` files** use indices. For example, in the generated `oyster_comm.dat`:
   ```ampl
-  set C1 := 33 36 44 ;   # these are INDICES, not site labels
+  set C1 :=
+    0  13  33  36  44  45  46 ;   # these are INDICES, not site labels
   ```
-  Looking up indices `33, 36, 44` in the mapping CSV shows that `C1` actually contains site labels `{42, 48, 56}`.
+  Looking up those indices in the mapping CSV shows that `C1` actually contains site labels `{1, 18, 42, 48, 56, 57, 58}`.
+- `oyster_comm.dat` is **generated by `prepare_data.py`** from `data/communitiesJune2002.xlsx`, which does the label→index translation and **refuses to run unless the five communities partition all 49 candidates** (sizes 7 / 19 / 10 / 5 / 8 = 49). It can no longer silently go stale or untranslated.
 - **Python runner scripts** (`scripts/run_miqp*.py`) translate AMPL indices back to site labels before writing CSVs, so the output you read is always in biological labels.
 - **The drivers** (`run_everything.py`, `run_extra_experiments.py`) operate in site labels throughout.
 
@@ -177,13 +190,21 @@ AMPL + Gurobi need to be on PATH for the MIQP scripts. Verify with:
 python -m scripts.check_ampl_env
 ```
 
-The ODE heuristics (greedy, swap, stingy) and the convergence check work with just Python — no AMPL needed.
+The ODE heuristics (greedy, swap, stingy) and the convergence check work with just Python — no AMPL needed. **Run every command from the repository root** so `import config` resolves.
 
 ---
 
 ## 🚀 Running the Models
 
-All MIQP/centrality scripts accept `--matrix 1` or `--matrix 2`. Outputs are written to `runs/` and figures to `figures/`.
+Everything is parameterized by `config.py`. Regenerate the AMPL data first, then run any model. All MIQP/centrality scripts accept `--matrix 1` or `--matrix 2`. Outputs are written to `runs/` and figures to `figures/`.
+
+### Generate the AMPL data (from `config.py` + the spreadsheets)
+
+```bash
+python -m scripts.prepare_data --matrix both      # or --matrix 1 / --matrix 2
+```
+
+This writes `ampl/oyster_quad.dat` (matrix-dependent), `ampl/oyster_comm.dat`, and `ampl/oyster_size.dat`, plus the index-mapping CSVs. `oyster_quad.dat` is overwritten per matrix, so for a standalone single-matrix MIQP run, prepare that matrix first (the `run_everything.py` driver does this automatically).
 
 ### ODE-driven heuristics (constant P₀)
 
@@ -230,7 +251,7 @@ python -m scripts.make_figures
 > The MIQP surrogate retains self-recruitment (the connectivity diagonal), matching the JARS ODE. Zeroing it is reported only as a sensitivity check; it leaves the base/size selections unchanged and the cross-matrix and 7-site backbones unaffected.
 
 ### Validation
-`run_everything.py` re-derives every heuristic and MIQP objective and validates it against embedded reference numbers (prints `PASSED / FAILED`). The ten heuristic scores (6 constant-`P₀` + 4 realistic-`P₀`) match the original logs **exactly to six decimal places**.
+`run_everything.py` re-derives every heuristic and MIQP objective and validates it against `references.json` (prints `OK / MISMATCH / no-ref` per design and a `PASSED / FAILED` summary). The ten heuristic scores (6 constant-`P₀` + 4 realistic-`P₀`) match the original logs **exactly to six decimal places**.
 
 ### Heuristic scores under constant P₀
 | Matrix | Greedy | Greedy + Swap | Stingy |
@@ -244,9 +265,11 @@ On both matrices the swap improves on greedy by changing the set (M1 by ~1.8%, M
 | Model | Matrix 1 | Matrix 2 |
 | --- | ---: | ---: |
 | Base MIQP | 14,785.03 | 16,446.59 |
-| + Comm | 13,844.54 | 15,218.16 |
+| + Comm † | 13,863.50 | 15,294.18 |
 | + Size | 58,564.19 | 66,552.23 |
-| + Comm + Size | 56,443.65 | 64,448.16 |
+| + Comm + Size † | 56,443.87 | 64,551.97 |
+
+† The community partition was corrected to the intended 49-site partition (sizes 7/19/10/5/8; the earlier `oyster_comm.dat` covered only 37 sites and used untranslated indices). This updates only the community-constrained rows; **Base, +Size, the heuristic scores, and the 7-site backbone are unchanged.** The `+Comm` objectives are exact; the `+Comm+Size` objectives are refreshed on the next Gurobi solve via `run_everything.py --update-refs`.
 
 The sizing models always exhaust the 1,000-acre budget and allocate 40–50 acres to network hubs, 5–15 acres to weaker neighbors. The optimal *set* under sizing is identical to the base MIQP set on both matrices.
 
@@ -254,12 +277,12 @@ The sizing models always exhaust the 1,000-acre budget and allocate 40–50 acre
 Across all 18 model runs (2 matrices × 4 MIQP variants + 6 constant-P₀ heuristics + 4 realistic-P₀ heuristics):
 
 - **Global backbone (every model, every matrix, both P₀ regimes):**
-  `{10, 31, 37, 40, 41, 49, 53}` — **7 sites**
+  `{10, 31, 37, 40, 41, 49, 53}` — **7 sites** (unchanged after the community correction)
 - **Cross-matrix constant-P₀ backbone:**
-  `{10, 15, 31, 32, 37, 40, 41, 49, 51, 52, 53}` — **11 sites**
+  `{10, 15, 17, 31, 32, 37, 40, 41, 49, 51, 52, 53}` — **12 sites**
 - **Per-matrix constant-P₀ backbone (7 constant models each):**
   Matrix 1: **17 sites** `{10, 15, 16, 17, 26, 28, 31, 32, 37, 40, 41, 44, 49, 51, 52, 53, 54}`
-  Matrix 2: **15 sites** `{10, 11, 12, 15, 29, 31, 32, 36, 37, 40, 41, 49, 51, 52, 53}`
+  Matrix 2: **16 sites** `{10, 11, 12, 15, 17, 29, 31, 32, 36, 37, 40, 41, 49, 51, 52, 53}`
 
 The 7-site backbone is the practical takeaway: these reefs sit in dense subnetworks (high eigenvector centrality, high PageRank) or act as bridges (high betweenness), and every optimization method we ran selects them. **Any restoration design that omits them is structurally weaker.**
 
@@ -277,22 +300,22 @@ Zeroing the connectivity diagonal leaves the base/size **selections unchanged** 
 ## ✅ Reproducing Everything
 
 ```bash
-# 0. Setup + (for MIQP) verify the solver
+# 0. Setup + (for MIQP) verify the solver. Optionally edit config.py.
 pip install -r requirements.txt
 python -m scripts.check_ampl_env
 
-# 1. Generate AMPL data from Excel (self-recruitment / diagonal kept)
-python -m scripts.prepare_miqp_data --matrix 1
-python -m scripts.prepare_miqp_data --matrix 2
+# 1. Generate AMPL data from config.py + Excel (self-recruitment / diagonal kept,
+#    communities partition-checked and translated to AMPL indices).
+python -m scripts.prepare_data --matrix both
 
 # 2. One-pass: all heuristics (constant + realistic P0) + all 8 MIQP, both
-#    matrices, parallelized, self-validated against the embedded references.
+#    matrices, parallelized, self-validated against references.json.
 #    Writes runs/run_everything.json and prints PASSED / FAILED.
 python run_everything.py
 
 # 3. Robustness experiments E1-E5 (surrogate fidelity, null baseline, budget
 #    nesting, A* / P1 sensitivity, self-recruitment sensitivity).
-#    Writes runs/extra_experiments.json (+ .txt mirror).
+#    Writes runs/extra_experiments.json.
 python run_extra_experiments.py
 
 # 4. Equilibrium-convergence check (justifies the t = 1000 horizon)
@@ -304,9 +327,9 @@ python -m scripts.network_core_analysis --matrix 2
 python -m scripts.make_figures
 ```
 
-For granular runs, the individual `scripts/run_*` entry points above produce the same per-model CSVs in `runs/`. `run_everything.py` accepts `--skip-miqp` / `--skip-heur` to run only one layer, and `--workers N` to cap CPU usage.
+For granular runs, the individual `scripts/run_*` entry points above produce the same per-model CSVs in `runs/`. `run_everything.py` accepts `--skip-miqp` / `--skip-heur` to run only one layer, `--workers N` to cap CPU usage, and `--update-refs` to record a fresh run's numbers into `references.json`.
 
-**Validation flow at a glance:** `run_everything.py` checks every heuristic and MIQP objective + the backbone; `run_extra_experiments.py` checks the robustness claims (E1–E5); `scripts/settling_time.py` checks equilibrium convergence. If you're reviewing or extending the work, run those three first.
+**Validation flow at a glance:** `run_everything.py` checks every heuristic and MIQP objective + the backbone against `references.json`; `run_extra_experiments.py` checks the robustness claims (E1–E5); `scripts/settling_time.py` checks equilibrium convergence. If you're reviewing or extending the work, run those three first.
 
 ---
 

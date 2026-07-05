@@ -213,10 +213,23 @@ Just the cardinality constraint. Picks the most retentive $25$-site cluster.
 Adds five geographic-region constraints: $|S \cap C_r| \geq r_r$ with $(r_1, r_2, r_3, r_4, r_5) = (2, 5, 3, 2, 3)$. The total floor of $15$ leaves $10$ ``flex'' sites for the optimizer to place freely. This is the equity model used to satisfy multi-stakeholder coverage.
 
 \subsubsection*{(c) MIQP + variable sizing --- \texttt{oyster\_size.mod}}
-Adds a continuous reef-area variable $s_i \in [L_i, U_i]$ for each selected site ($5$--$50$ acres), with a global budget $\sum s_i \leq T = 1000$ acres and a normalization $\bar{S} = 20$. The objective scales each $Pe(i)$ and $W(i,j)$ entry by $s_i / \bar{S}$. This lets the model allocate big reefs to hubs and small reefs to marginal sites.
+Adds a continuous reef-area variable $s_i$ for each candidate site, with
+$L_i x_i \leq s_i \leq U_i x_i$, a total-area budget $\sum_i s_i \leq T=1000$ acres,
+and a normalization $\bar{S}=20$. In the canonical size model used here, the
+internal connectivity term uses \emph{source-only} area scaling:
+\[
+\max \; \sum_{i\in N} Pe(i)\,\frac{s_i}{\bar{S}}
+      + \sum_{i,j\in N} W(i,j)\,\frac{s_i}{\bar{S}}\,x_j .
+\]
+Thus a larger source reef is credited with producing more larvae, while a
+destination site only needs to be selected in order to receive internal larval
+credit. This is the conservative size formulation: it does not multiply by the
+recipient area $s_j$, avoiding possible double counting if recipient-site
+footprint is already partly reflected in the raw fixed-release connectivity
+matrix.
 
 \subsubsection*{(d) MIQP + community + sizing --- \texttt{oyster\_comm\_size.mod}}
-Combines (b) and (c). This is the model that most closely matches real planning constraints --- it must include some sites for regional equity, but it can size those sites small to limit the cost in surrogate larvae production.
+Combines (b) and (c). This is the model that most closely matches real planning constraints --- it must include some sites for regional equity, but it can allocate small areas to lower marginal-value sites while reserving the largest allowable areas for stronger larval source sites.
 
 % ============================================================
 \section{Results}
@@ -280,7 +293,7 @@ Notice that under realistic forcing, greedy + swap and stingy no longer agree on
 
 \subsection{MIQP surrogate results under constant \texorpdfstring{$P_0$}{P0}}
 
-All four AMPL/Gurobi models solved to proven global optimality (nonconvex bilinear objectives, \texttt{nonconvex=2}) in well under a second on a standard laptop. Table~\ref{tab:miqp} summarizes the objective values and selected sets.
+All eight AMPL/Gurobi integer-programming models solved to proven global optimality with self-recruitment retained. Table~\ref{tab:miqp} reports the objective values and selected sets. Objective magnitudes differ between the baseline/community models and the reef-size models because the latter scale larval contributions by constructed reef area.
 
 \begin{table}[H]
 \centering
@@ -289,31 +302,31 @@ All four AMPL/Gurobi models solved to proven global optimality (nonconvex biline
 \small
 \begin{tabularx}{\linewidth}{@{}l X r@{}}
 \toprule
-\textbf{Model} & \textbf{Selected sites (sorted)} & \textbf{$\tilde{F}(S)$} \\
+\textbf{Model} & \textbf{Selected sites (sorted)} & \textbf{Surrogate objective} \\
 \midrule
 M1 Base MIQP & \texttt{10,\ 11,\ 12,\ 15,\ 16,\ 17,\ 20,\ 26,\ 27,\ 28,\ 29,\ 31,\ 32,\ 33,\ 36,\ 37,\ 40,\ 41,\ 44,\ 49,\ 51,\ 52,\ 53,\ 54,\ 59} & 14785.03 \\
-M1 MIQP + Comm & \texttt{10,\ 12,\ 15,\ 16,\ 17,\ 21,\ 26,\ 28,\ 29,\ 31,\ 32,\ 33,\ 37,\ 40,\ 41,\ 42,\ 44,\ 47,\ 48,\ 49,\ 51,\ 52,\ 53,\ 54,\ 59} & 13844.54 \\
-M1 MIQP + Size & \texttt{10,\ 11,\ 12,\ 15,\ 16,\ 17,\ 20,\ 26,\ 27,\ 28,\ 29,\ 31,\ 32,\ 33,\ 36,\ 37,\ 40,\ 41,\ 44,\ 49,\ 51,\ 52,\ 53,\ 54,\ 59} & 58564.19 \\
-M1 MIQP + Comm + Size & \texttt{10,\ 12,\ 15,\ 16,\ 17,\ 21,\ 26,\ 28,\ 29,\ 31,\ 32,\ 33,\ 37,\ 40,\ 41,\ 42,\ 44,\ 47,\ 49,\ 51,\ 52,\ 53,\ 54,\ 56,\ 59} & 56443.65 \\
+M1 MIQP + Comm & \texttt{1,\ 10,\ 12,\ 15,\ 16,\ 17,\ 21,\ 26,\ 28,\ 29,\ 31,\ 32,\ 33,\ 37,\ 40,\ 41,\ 42,\ 44,\ 47,\ 49,\ 51,\ 52,\ 53,\ 54,\ 59} & 13863.50 \\
+M1 MIQP + Size & \texttt{10,\ 11,\ 12,\ 15,\ 16,\ 17,\ 21,\ 26,\ 27,\ 28,\ 29,\ 31,\ 32,\ 33,\ 36,\ 37,\ 40,\ 41,\ 44,\ 49,\ 51,\ 52,\ 53,\ 54,\ 59} & 32620.49 \\
+M1 MIQP + Comm + Size & \texttt{1,\ 10,\ 12,\ 15,\ 16,\ 21,\ 26,\ 27,\ 28,\ 29,\ 31,\ 32,\ 33,\ 37,\ 40,\ 41,\ 42,\ 44,\ 47,\ 49,\ 51,\ 52,\ 53,\ 54,\ 59} & 30517.81 \\
 \midrule
 M2 Base MIQP & \texttt{10,\ 11,\ 12,\ 15,\ 16,\ 17,\ 20,\ 26,\ 27,\ 28,\ 29,\ 31,\ 32,\ 33,\ 36,\ 37,\ 40,\ 41,\ 44,\ 49,\ 51,\ 52,\ 53,\ 54,\ 59} & 16446.59 \\
-M2 MIQP + Comm & \texttt{10,\ 11,\ 12,\ 15,\ 16,\ 17,\ 21,\ 27,\ 28,\ 29,\ 31,\ 32,\ 33,\ 36,\ 37,\ 40,\ 41,\ 42,\ 47,\ 49,\ 51,\ 52,\ 53,\ 56,\ 59} & 15218.16 \\
-M2 MIQP + Size & \texttt{10,\ 11,\ 12,\ 15,\ 16,\ 17,\ 20,\ 26,\ 27,\ 28,\ 29,\ 31,\ 32,\ 33,\ 36,\ 37,\ 40,\ 41,\ 44,\ 49,\ 51,\ 52,\ 53,\ 54,\ 59} & 66552.23 \\
-M2 MIQP + Comm + Size & \texttt{10,\ 11,\ 12,\ 15,\ 16,\ 21,\ 26,\ 27,\ 28,\ 29,\ 31,\ 32,\ 33,\ 36,\ 37,\ 40,\ 41,\ 42,\ 47,\ 48,\ 49,\ 51,\ 52,\ 53,\ 59} & 64448.16 \\
+M2 MIQP + Comm & \texttt{10,\ 11,\ 12,\ 15,\ 16,\ 17,\ 18,\ 19,\ 27,\ 28,\ 29,\ 31,\ 32,\ 33,\ 36,\ 37,\ 40,\ 41,\ 42,\ 47,\ 49,\ 51,\ 52,\ 53,\ 59} & 15294.18 \\
+M2 MIQP + Size & \texttt{10,\ 11,\ 12,\ 15,\ 16,\ 17,\ 20,\ 26,\ 27,\ 28,\ 29,\ 31,\ 32,\ 33,\ 36,\ 37,\ 40,\ 41,\ 44,\ 49,\ 51,\ 52,\ 53,\ 54,\ 59} & 36695.67 \\
+M2 MIQP + Comm + Size & \texttt{10,\ 11,\ 12,\ 15,\ 16,\ 17,\ 18,\ 19,\ 21,\ 27,\ 28,\ 29,\ 31,\ 32,\ 33,\ 36,\ 37,\ 40,\ 41,\ 42,\ 49,\ 51,\ 52,\ 53,\ 59} & 34226.75 \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-Two notes on the sizing models. First, in both matrices the optimal \emph{set} under sizing is identical to the base MIQP set --- the optimizer doesn't change who is selected, it just allocates large area ($40$--$50$ acres) to high-connectivity hubs and small area ($5$--$15$ acres) to weaker neighbors. Second, the total reef area is exactly $1000$ acres in every sizing solution; the budget constraint is tight in all cases.
+Two notes on the reef-sizing models. First, adding reef-size decisions changes the selected set only slightly relative to the corresponding model without reef-size decisions. The M2 size model selects the same $25$ sites as the M2 baseline MIQP, while the M1 size model exchanges one site (site $21$ for site $20$). Similarly, each community-plus-size model differs from its community-constrained counterpart by one site: site $27$ replaces site $17$ on M1, and site $21$ replaces site $47$ on M2. Within the selected set, the optimizer allocates the maximum allowable area ($40$--$50$ acres) to sites with the largest marginal source value, meaning sites whose external supply and outgoing larval contribution to the selected network are highest under the surrogate. Lower marginal-value selected sites are kept at the $5$-acre floor, with a single interior site absorbing the residual budget. For example, in the M1 MIQP + Size solution, the allocation is $50$ acres at sites $10, 15, 16, 17, 21, 26$--$29, 31$--$33$; $40$ acres at sites $36, 40, 41, 44, 49, 51$--$54$; $25$ acres at site $11$; and $5$ acres at sites $12, 37, 59$.
 
-Representative size profile (M1 MIQP + Size): $50$ acres at sites $10, 11, 12, 15, 16, 17, 26$--$33$; $40$ acres at sites $40, 41, 44, 51$--$54, 59$; and $5$--$15$ acres at sites $20, 36, 37, 49$. See \texttt{runs/miqp\_size\_sites\_matrix\{1,2\}.csv} for the full per-site allocations.
+Second, the total reef area is exactly $1000$ acres in every sizing solution; the $1000$-acre constraint is tight in all cases.
 
 \subsection{Backbone sites: intersections across models and matrices}
 \label{sec:backbone}
 
-The point of running so many models is to see which sites are robust to the choice of method, matrix, and forcing regime. The intersection structure is the cleanest summary.
+The point of running several models is to see which sites are robust to the choice of method, connectivity matrix, and forcing regime. The sites in common across the solutions generated by each model provide a way to identify key reef site locations.
 
-\subsubsection*{Within-matrix constant-$P_0$ intersection (all $7$ constant models)}
+\subsubsection*{Within-matrix constant-$P_0$ intersection (all seven constant-forcing models)}
 
 \begin{table}[H]
 \centering
@@ -322,13 +335,13 @@ The point of running so many models is to see which sites are robust to the choi
 \toprule
 \textbf{Matrix} & \textbf{Sites common to greedy, swap, stingy, MIQP, +Comm, +Size, +Comm+Size} & \textbf{Size} \\
 \midrule
-Matrix 1 & \texttt{10, 15, 16, 17, 26, 28, 31, 32, 37, 40, 41, 44, 49, 51, 52, 53, 54} & 17 \\
-Matrix 2 & \texttt{10, 11, 12, 15, 29, 31, 32, 36, 37, 40, 41, 49, 51, 52, 53} & 15 \\
+Matrix 1 & \texttt{10, 15, 16, 26, 28, 31, 32, 37, 40, 41, 44, 49, 51, 52, 53, 54} & 16 \\
+Matrix 2 & \texttt{10, 11, 12, 15, 17, 29, 31, 32, 36, 37, 40, 41, 49, 51, 52, 53} & 16 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Matrix~1 has a $17$-site backbone and Matrix~2 a $15$-site backbone across the seven constant-forcing optimization runs.
+This within-matrix table enumerates every constant-forcing run, including the greedy seed, applied symmetrically to both connectivity matrices. Matrix~1 has a $16$-site backbone and Matrix~2 a $16$-site backbone across the seven constant-forcing optimization runs.
 
 \subsubsection*{Cross-matrix constant-$P_0$ backbone}
 
@@ -339,12 +352,12 @@ Matrix~1 has a $17$-site backbone and Matrix~2 a $15$-site backbone across the s
 \toprule
 \textbf{Selection} & \textbf{Sites} & \textbf{Size} \\
 \midrule
-Intersection of M1 (17) and M2 (15) backbones & \texttt{10, 15, 31, 32, 37, 40, 41, 49, 51, 52, 53} & 11 \\
+Intersection of M1 (16) and M2 (16) backbones & \texttt{10, 15, 31, 32, 37, 40, 41, 49, 51, 52, 53} & 11 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsubsection*{Global backbone (all $18$ models, both matrices, both $P_0$ regimes)}
+\subsubsection*{Global backbone (post-search and exact designs)}
 
 \begin{table}[H]
 \centering
@@ -353,64 +366,38 @@ Intersection of M1 (17) and M2 (15) backbones & \texttt{10, 15, 31, 32, 37, 40, 
 \toprule
 \textbf{Selection} & \textbf{Sites} & \textbf{Size} \\
 \midrule
-Sites selected by every one of the $18$ model runs & \texttt{10, 31, 37, 40, 41, 49, 53} & 7 \\
+Sites selected by all $16$ post-search and exact designs & \texttt{10, 31, 37, 40, 41, 49, 53} & 7 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-These seven sites --- \textbf{10, 31, 37, 40, 41, 49, 53} --- appear in every greedy, every greedy+swap, every stingy, and every MIQP variant (base, +Comm, +Size, +Comm+Size) on both connectivity matrices and under both constant and realistic external forcing. They are the structural arteries of the bay's larval network: any restoration design that excludes them is structurally weaker. (The $18$ designs are the six constant-$P_0$ heuristics, the four realistic-$P_0$ heuristics reported in Table~\ref{tab:heur-real}, and the eight MIQP solves. Standalone greedy under realistic forcing is myopic and drops site $37$; it is used only as the seed for the realistic swap and is not counted among the $18$.)
+The seven global-backbone sites --- \textbf{10, 31, 37, 40, 41, 49, 53} --- are selected by all $16$ post-search and exact designs considered here: the four swap heuristics and four stingy heuristics across both matrices and both external-forcing regimes, and the eight integer-programming solutions across both matrices and all four surrogate formulations. To avoid an asymmetric counting rule, standalone greedy is excluded in both forcing regimes, since greedy generates the initial solution for the local-search improvement procedure. The result does not depend on this choice. The two constant-forcing greedy seeds also contain the full backbone, and of the two realistic-forcing greedy seeds only the M1 seed omits a backbone site, site $37$. Counting only the post-search and exact designs gives sixteen of sixteen; counting the greedy seeds as well gives nineteen of twenty. Either way the backbone is the same set of seven sites.
 
-\subsection{Network centrality on the constant-\texorpdfstring{$P_0$}{P0} backbone}
+\subsection{Network centrality on the global backbone}
 
-To explain why the same sites keep being selected, we computed five weighted centrality metrics on the directed connectivity graph defined by $P_1$ for each matrix: in-strength, out-strength, betweenness (with edge length $1 / \text{weight}$), eigenvector centrality, and PageRank. Sites were ranked separately by each metric, and the average rank gives an overall ``network importance'' ordering. Tables~\ref{tab:netM1} and \ref{tab:netM2} show the top $10$ sites of the $11$-site cross-matrix backbone for each matrix.
+To characterize how the seven backbone sites function in the transport network, we ranked all $49$ candidate reef restoration sites by five standard centrality measures: in-strength, out-strength, betweenness, eigenvector centrality, and PageRank. In- and out-strength are the off-diagonal weighted degree sums, and diagonal self-recruitment is reported separately. For betweenness, weights were converted to path lengths as $1/P_{i,k}$, so stronger larval-transfer links correspond to shorter paths. PageRank and eigenvector centrality were computed on the weighted directed graph with self-recruitment retained.
 
 \begin{table}[H]
 \centering
-\caption{Matrix 1 --- top $10$ of the backbone by average rank.}
-\label{tab:netM1}
+\caption{Network-centrality placement of the seven global-backbone sites among all $49$ candidates. Lower average rank is more central; rank $1$ is most central on a given metric.}
+\label{tab:centrality}
 \small
-\begin{tabular}{@{}rrrrrrr@{}}
+\begin{tabularx}{\linewidth}{@{}c c c X@{}}
 \toprule
-\textbf{Site} & \textbf{In-str.} & \textbf{Out-str.} & \textbf{Betw.} & \textbf{Eig.} & \textbf{PR} & \textbf{avg rank} \\
+\textbf{Site} & \textbf{M1 avg. rank} & \textbf{M2 avg. rank} & \textbf{Most distinctive role} \\
 \midrule
-10 & 359,474 & 214,957 & 0.0266 & 0.5974 & 0.0999 & 7.0 \\
-40 & 292,701 & 218,022 & 0.0541 & 0.6304 & 0.0936 & 4.8 \\
-32 & 198,442 & 226,987 & 0.0966 & 0.1119 & 0.0273 & 6.0 \\
-31 & 173,926 & 144,740 & 0.0545 & 0.2975 & 0.0584 & 7.8 \\
-41 & 166,988 & 193,584 & 0.0306 & 0.2877 & 0.0456 & 10.0 \\
-53 & 93,500  & 123,635 & 0.0842 & 0.0466 & 0.0270 & 11.2 \\
-52 & 93,545  & 153,534 & 0.0563 & 0.0078 & 0.0138 & 15.8 \\
-15 & 194,082 & 179,547 & 0.0098 & 0.0206 & 0.0175 & 16.4 \\
-49 & 79,623  & 95,582  & 0.0381 & 0.0174 & 0.0237 & 16.6 \\
-37 & 120,416 & 20,909  & 0.0168 & 0.1453 & 0.0481 & 17.0 \\
+10 & 3.0  & 6.8  & strongest receiver (in-strength rank 1 on both matrices) \\
+40 & 6.2  & 6.6  & spectral hub (eigenvector rank 1 on both matrices) \\
+41 & 5.4  & 8.0  & strong source (out-strength rank 4--5) \\
+31 & 8.0  & 5.6  & balanced hub, high on every metric \\
+53 & 11.2 & 12.2 & connector (upper-tier betweenness) \\
+49 & 15.8 & 10.2 & bridge (betweenness rank 1 on Matrix 2) \\
+37 & 15.6 & 16.8 & complementary: modest standalone centrality \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}
 
-\begin{table}[H]
-\centering
-\caption{Matrix 2 --- top $10$ of the backbone by average rank.}
-\label{tab:netM2}
-\small
-\begin{tabular}{@{}rrrrrrr@{}}
-\toprule
-\textbf{Site} & \textbf{In-str.} & \textbf{Out-str.} & \textbf{Betw.} & \textbf{Eig.} & \textbf{PR} & \textbf{avg rank} \\
-\midrule
-31 & 195,232 & 179,626 & 0.0408 & 0.3092 & 0.0750 & 8.8 \\
-40 & 423,838 & 115,054 & 0.0363 & 0.6913 & 0.1574 & 9.2 \\
-10 & 541,264 & 90,109  & 0.0355 & 0.5889 & 0.1311 & 10.2 \\
-49 & 130,852 & 155,422 & 0.0918 & 0.0178 & 0.0200 & 10.4 \\
-36 & 119,622 & 163,586 & 0.0395 & 0.1133 & 0.0346 & 12.2 \\
-41 & 161,622 & 234,275 & 0.0013 & 0.2140 & 0.0477 & 12.8 \\
-37 & 120,277 & 37,213  & 0.0758 & 0.1031 & 0.0323 & 13.0 \\
-53 & 87,729  & 196,023 & 0.0472 & 0.0183 & 0.0144 & 13.2 \\
-32 & 224,566 & 162,872 & 0.0186 & 0.0290 & 0.0144 & 15.0 \\
-15 & 159,499 & 156,282 & 0.0337 & 0.0094 & 0.0115 & 17.2 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The pattern is consistent across both matrices: sites $10, 31, 32, 40, 41$ are simultaneously high on eigenvector centrality and PageRank, meaning they are embedded in dense subnetworks of other important nodes. Sites $36, 49, 53$ score relatively high on betweenness, indicating they act as bridges between otherwise weakly-connected regions. This is the network-theoretic explanation for why optimization keeps selecting them: the JARS dynamics reward retentive loops and bridges, both of which these sites provide.
+Four of the seven sites ($10,31,40,41$) are unambiguous hubs, sitting in the top eight of $49$ on average across both connectivity matrices. Sites $49$ and $53$ are valuable less as strength hubs than as connectors. Site $37$ is the informative exception: its standalone centrality is only moderate, and its out-strength is especially low, yet it is selected by every post-search and exact design. This illustrates the non-additivity that motivates the optimization problem. Site $37$ earns its place not by being individually central, but through its interaction with the rest of the selected set, which the quadratic surrogate rewards and a site-by-site centrality screen would miss.
 
 % ============================================================
 \section{Repository Structure and Reproducibility}
@@ -507,7 +494,7 @@ The canonical surrogate keeps self-recruitment (the connectivity diagonal). As a
 \subsection{Small cleanups for whoever takes over}
 
 \begin{itemize}[leftmargin=1.4em, itemsep=0.2em]
-  \item \texttt{scripts/network\_core\_analysis.py} hard-codes a core-site list at the top. The validated constant-$P_0$ backbones from this re-analysis are: global $7$ sites (\texttt{10, 31, 37, 40, 41, 49, 53}), cross-matrix $11$ sites, and within-matrix $17$ (M1) and $15$ (M2). The hard-coded list should be regenerated from these. Note that site $47$ is selected by the heuristics but not by the base or +Size MIQP on either matrix, so it sits in the within-matrix backbones but not the cross-matrix one.
+  \item \texttt{scripts/network\_core\_analysis.py} hard-codes a core-site list at the top. The validated backbones from this re-analysis are: global $7$ sites (\texttt{10, 31, 37, 40, 41, 49, 53}), cross-matrix $11$ sites, and within-matrix $16$ sites on both M1 and M2. The hard-coded list should be regenerated from these validated intersections.
   \item \texttt{scripts/prepare\_miqp\_data.py} contains a commented-out \texttt{np.fill\_diagonal(P, 0.0)} with a ``remove self-loops'' comment. Self-recruitment is intentionally retained, so that line should stay disabled and the comment reworded to avoid confusion.
   \item \texttt{scripts/experimental/run\_miqp\_inline.py} and \texttt{run\_miqp\_test.py} \emph{do} zero the diagonal. They are not part of the canonical pipeline; either delete the \texttt{experimental/} folder or comment those lines so the diagonal-zeroed surrogate is never run by accident.
   \item \texttt{ampl/oyster\_comm.dat} uses integer indices $0$--$48$ (the position in \texttt{CANDIDATE\_SITES}, not the original site label). Worth a one-line comment in the file since the same \texttt{.dat} is read alongside \texttt{.mod} files where $N = \{0, \ldots, 48\}$.
@@ -518,9 +505,9 @@ The canonical surrogate keeps self-recruitment (the connectivity diagonal). As a
 % ============================================================
 \section{Conclusions}
 
-Across two independent connectivity matrices, four MIQP variants, three ODE-driven heuristics, and two external forcing regimes --- $18$ distinct optimization runs in total --- the same seven reefs are selected by every single one: $10, 31, 37, 40, 41, 49, 53$. The eleven-site cross-matrix constant-forcing backbone $\{10, 15, 31, 32, 37, 40, 41, 49, 51, 52, 53\}$ is the next natural layer out, and the per-matrix backbones ($17$ sites for Matrix~1, $15$ for Matrix~2) extend that further.
+Across two contrasting connectivity matrices, two external-forcing regimes, ODE-driven post-search designs, and four integer-programming variants, the same seven reefs are selected by every post-search and exact design: $10, 31, 37, 40, 41, 49, 53$. The eleven-site cross-matrix constant-forcing backbone $\{10, 15, 31, 32, 37, 40, 41, 49, 51, 52, 53\}$ is the next natural layer out, and the per-matrix backbones (sixteen sites on Matrix~1 and sixteen on Matrix~2) extend that further.
 
-That this much agreement emerges from objectives that are conceptually quite different --- the full nonlinear JARS equilibrium on one hand, a quadratic plumbing surrogate on the other --- is not a tautology. It tells us that the surrogate captures the dominant structural drivers of the metapopulation dynamics. From a planning perspective, the practical translation is: a small number of reefs do most of the connectivity work, and any restoration design that omits the seven-site backbone is, with high confidence, structurally worse than one that includes it.
+That this much agreement emerges from objectives that are conceptually different --- the full nonlinear JARS equilibrium on one hand, a static quadratic surrogate on the other --- is not a tautology. It tells us that the surrogate captures the dominant structural drivers of the metapopulation dynamics for this instance. From a planning perspective, the practical translation is that a small number of reefs do much of the connectivity work, and the seven-site backbone identifies high-priority candidates within the modeled connectivity and demographic assumptions.
 
 % ============================================================
 \appendix
@@ -543,18 +530,18 @@ M1 Greedy (constant) & \texttt{4, 10, 15, 16, 17, 19, 20, 21, 26, 27, 28, 30, 31
 M1 Greedy + Swap (constant) & \texttt{10, 12, 15, 16, 17, 20, 21, 26, 28, 29, 31, 32, 33, 36, 37, 40, 41, 44, 47, 49, 51, 52, 53, 54, 59} \\
 M1 Stingy (constant) & \texttt{10, 12, 15, 16, 17, 20, 21, 26, 28, 29, 31, 32, 33, 36, 37, 40, 41, 44, 47, 49, 51, 52, 53, 54, 59} \\
 M1 MIQP (constant) & \texttt{10, 11, 12, 15, 16, 17, 20, 26, 27, 28, 29, 31, 32, 33, 36, 37, 40, 41, 44, 49, 51, 52, 53, 54, 59} \\
-M1 MIQP + Comm & \texttt{10, 12, 15, 16, 17, 21, 26, 28, 29, 31, 32, 33, 37, 40, 41, 42, 44, 47, 48, 49, 51, 52, 53, 54, 59} \\
-M1 MIQP + Size & \texttt{10, 11, 12, 15, 16, 17, 20, 26, 27, 28, 29, 31, 32, 33, 36, 37, 40, 41, 44, 49, 51, 52, 53, 54, 59} \\
-M1 MIQP + Comm + Size & \texttt{10, 12, 15, 16, 17, 21, 26, 28, 29, 31, 32, 33, 37, 40, 41, 42, 44, 47, 49, 51, 52, 53, 54, 56, 59} \\
+M1 MIQP + Comm & \texttt{1, 10, 12, 15, 16, 17, 21, 26, 28, 29, 31, 32, 33, 37, 40, 41, 42, 44, 47, 49, 51, 52, 53, 54, 59} \\
+M1 MIQP + Size & \texttt{10, 11, 12, 15, 16, 17, 21, 26, 27, 28, 29, 31, 32, 33, 36, 37, 40, 41, 44, 49, 51, 52, 53, 54, 59} \\
+M1 MIQP + Comm + Size & \texttt{1, 10, 12, 15, 16, 21, 26, 27, 28, 29, 31, 32, 33, 37, 40, 41, 42, 44, 47, 49, 51, 52, 53, 54, 59} \\
 M1 Greedy + Swap (realistic) & \texttt{4, 6, 10, 15, 19, 20, 21, 24, 27, 30, 31, 32, 36, 37, 38, 39, 40, 41, 47, 49, 51, 52, 53, 55, 60} \\
 M1 Stingy (realistic) & \texttt{4, 10, 15, 16, 17, 19, 20, 21, 26, 27, 31, 32, 33, 36, 37, 40, 41, 44, 47, 49, 51, 52, 53, 54, 59} \\
 M2 Greedy (constant) & \texttt{4, 10, 11, 12, 15, 17, 19, 20, 21, 26, 27, 28, 29, 30, 31, 32, 36, 37, 40, 41, 47, 49, 51, 52, 53} \\
 M2 Greedy + Swap (constant) & \texttt{10, 11, 12, 15, 16, 17, 19, 20, 26, 29, 31, 32, 33, 36, 37, 40, 41, 44, 47, 49, 51, 52, 53, 54, 59} \\
 M2 Stingy (constant) & \texttt{10, 11, 12, 15, 16, 17, 19, 20, 26, 29, 31, 32, 33, 36, 37, 40, 41, 44, 47, 49, 51, 52, 53, 54, 59} \\
 M2 MIQP (constant) & \texttt{10, 11, 12, 15, 16, 17, 20, 26, 27, 28, 29, 31, 32, 33, 36, 37, 40, 41, 44, 49, 51, 52, 53, 54, 59} \\
-M2 MIQP + Comm & \texttt{10, 11, 12, 15, 16, 17, 21, 27, 28, 29, 31, 32, 33, 36, 37, 40, 41, 42, 47, 49, 51, 52, 53, 56, 59} \\
+M2 MIQP + Comm & \texttt{10, 11, 12, 15, 16, 17, 18, 19, 27, 28, 29, 31, 32, 33, 36, 37, 40, 41, 42, 47, 49, 51, 52, 53, 59} \\
 M2 MIQP + Size & \texttt{10, 11, 12, 15, 16, 17, 20, 26, 27, 28, 29, 31, 32, 33, 36, 37, 40, 41, 44, 49, 51, 52, 53, 54, 59} \\
-M2 MIQP + Comm + Size & \texttt{10, 11, 12, 15, 16, 21, 26, 27, 28, 29, 31, 32, 33, 36, 37, 40, 41, 42, 47, 48, 49, 51, 52, 53, 59} \\
+M2 MIQP + Comm + Size & \texttt{10, 11, 12, 15, 16, 17, 18, 19, 21, 27, 28, 29, 31, 32, 33, 36, 37, 40, 41, 42, 49, 51, 52, 53, 59} \\
 M2 Greedy + Swap (realistic) & \texttt{1, 4, 6, 10, 18, 19, 20, 21, 24, 30, 31, 35, 36, 37, 38, 39, 40, 41, 42, 47, 49, 53, 55, 57, 60} \\
 M2 Stingy (realistic) & \texttt{4, 6, 7, 10, 15, 16, 19, 20, 21, 24, 26, 27, 30, 31, 32, 36, 37, 40, 41, 44, 47, 49, 51, 52, 53} \\
 \bottomrule

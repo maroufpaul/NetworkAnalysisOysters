@@ -10,9 +10,9 @@
 
 
 
-set N;    # All candidate sites (0-48 in your case, 49 sites total)
+set N;    # All candidate sites (0-48, 49 sites total)
 
-# Community definitions (geographic regions, e.g., rivers)
+# Community definitions (geographic regions,)
 set C1;   # Community 1 (7 sites)
 set C2;   # Community 2 (19 sites) 
 set C3;   # Community 3 (10 sites)
@@ -53,14 +53,9 @@ var s{N} >= 0;                    # s[i] = reef size at site i (acres)
 # Contribution scales with reef size
 maximize TotalLarvae:
     sum {i in N} Pe[i] * (s[i]/Sbar)                        # External larvae
-  + sum {l in N, i in N} W[l,i] * (s[l]/Sbar) * (s[i]/Sbar); # Internal larvae
+  + sum {l in N, i in N} W[l,i] * (s[l]/Sbar) * x[i];       # Internal larvae
 
 
-# - External: Larger reefs receive more larvae (proportional to size)
-# - Internal: Larvae flow from l to i scales with BOTH reef sizes
-#   * Larger source (s[l]) produces more larvae
-#   * Larger destination (s[i]) receives more larvae
-# - Sbar=20 normalizes contributions (20-acre reef contributes 1.0)
 
 
 # CONSTRAINTS
@@ -112,7 +107,6 @@ subject to MaxSize {i in N}:
     s[i] <= U[i] * x[i];
 # If x[i]=0 (not selected): s[i] <= 0 (forces s[i]=0, no reef)
 # If x[i]=1 (selected): s[i] <= U[i] (can't exceed site capacity)
-# Site capacity limited by water depth, substrate area, geography
 
 # ----------------------------------------------------------------------------
 # Constraint 9: Total area budget

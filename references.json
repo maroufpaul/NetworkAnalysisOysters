@@ -1,4 +1,5 @@
 {
+  "_note": "Golden values, validated by run_everything.py. Sizing models use MODEL A (recipient enters as binary x[i], matching the paper's variable-size objective s_l*x_k). Base/+Comm and heuristics are unchanged; +Size/+Comm+Size objectives, their selected sets, and the two within-matrix backbones reflect Model A. The 7-site global backbone and the 11-site cross-matrix backbone are unchanged. Refresh with `run_everything.py --update-refs`.",
   "heuristics": {
     "M1 constant Greedy": {
       "score": 1.84664,
@@ -304,19 +305,18 @@
   "miqp": {
     "M1 Base": 14785.03,
     "M1 +Comm": 13863.5,
-    "M1 +Size": 58564.19,
-    "M1 +Comm+Size": 56443.87,
+    "M1 +Size": 32620.49,
+    "M1 +Comm+Size": 30517.81,
     "M2 Base": 16446.59,
     "M2 +Comm": 15294.18,
-    "M2 +Size": 66552.23,
-    "M2 +Comm+Size": 64581.66
+    "M2 +Size": 36695.67,
+    "M2 +Comm+Size": 34226.75
   },
   "backbone": {
     "M1 within": [
       10,
       15,
       16,
-      17,
       26,
       28,
       31,
@@ -336,6 +336,7 @@
       11,
       12,
       15,
+      17,
       29,
       31,
       32,

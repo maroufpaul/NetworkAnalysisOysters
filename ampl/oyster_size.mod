@@ -16,7 +16,7 @@ var s{N} >= 0;               # reef size
 
 maximize Larvae:
     sum {i in N} Pe[i] * (s[i]/Sbar)
-  + sum {l in N, i in N} W[l,i] * (s[l]/Sbar) * (s[i]/Sbar);
+  + sum {l in N, i in N} W[l,i] * (s[l]/Sbar) * x[i];
 
 subject to PickK:
     sum {i in N} x[i] = K;

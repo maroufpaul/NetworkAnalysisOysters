@@ -108,3 +108,23 @@ SIZE = {
 # Solver
 # --------------------------------------------------------------------------- #
 GUROBI_OPTIONS = "nonconvex=2 mipgap=1e-9"
+
+# --------------------------------------------------------------------------- #
+# Reef-size budget-sweep experiment  (scripts/size_sweep.py)
+# --------------------------------------------------------------------------- #
+# UNIFORM bounds on purpose: the canonical SIZE dict above tiers the ceiling by
+# index (40 vs 50), which is an assumption, not biology. For the experiment we
+# give every site the SAME L and U so any area concentration is driven by
+# connectivity, not by which ceiling a site was handed.
+#
+# Sweep the budget T across the BINDING band  L*K < T < U*K.
+# With K=25, L=5, U=50 that band is 125 < T < 1250:
+#   T >= 1250 -> every site maxed (no discrimination)
+#   T <= 125  -> every site at the floor (no discrimination)
+#   in between -> budget binds, optimizer must rank sites -> the interesting case.
+SIZE_SWEEP = {
+    "L": 5.0,            # uniform lower bound (acres) when a site is built
+    "U": 50.0,           # uniform upper bound (acres)
+    "Sbar": 20.0,
+    "budgets": [300, 500, 750, 1000],   # slack = T/(K*U) = 0.24 / 0.40 / 0.60 / 0.80
+}

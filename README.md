@@ -253,47 +253,16 @@ python -m scripts.make_figures
 ### Validation
 `run_everything.py` re-derives every heuristic and MIQP objective and validates it against `references.json` (prints `OK / MISMATCH / no-ref` per design and a `PASSED / FAILED` summary). The ten heuristic scores (6 constant-`P₀` + 4 realistic-`P₀`) match the original logs **exactly to six decimal places**.
 
-### Heuristic scores under constant P₀
-| Matrix | Greedy | Greedy + Swap | Stingy |
-| ---: | ---: | ---: | ---: |
-| Matrix 1 | 1.846640 | **1.880054** | **1.880054** |
-| Matrix 2 | 1.692871 | **1.733033** | **1.733033** |
 
-On both matrices the swap improves on greedy by changing the set (M1 by ~1.8%, M2 by ~2.4%), and greedy + swap and stingy converge to the same 25-site set with the same score — strong evidence of a stable local optimum.
-
-### MIQP objectives under constant P₀
-| Model | Matrix 1 | Matrix 2 |
-| --- | ---: | ---: |
-| Base MIQP | 14,785.03 | 16,446.59 |
-| + Comm † | 13,863.50 | 15,294.18 |
-| + Size | 58,564.19 | 66,552.23 |
-| + Comm + Size † | 56,443.87 | 64,551.97 |
-
-† The community partition was corrected to the intended 49-site partition (sizes 7/19/10/5/8; the earlier `oyster_comm.dat` covered only 37 sites and used untranslated indices). This updates only the community-constrained rows; **Base, +Size, the heuristic scores, and the 7-site backbone are unchanged.** The `+Comm` objectives are exact; the `+Comm+Size` objectives are refreshed on the next Gurobi solve via `run_everything.py --update-refs`.
-
-The sizing models always exhaust the 1,000-acre budget and allocate 40–50 acres to network hubs, 5–15 acres to weaker neighbors. The optimal *set* under sizing is identical to the base MIQP set on both matrices.
 
 ### Backbone sites
 Across all 18 model runs (2 matrices × 4 MIQP variants + 6 constant-P₀ heuristics + 4 realistic-P₀ heuristics):
 
 - **Global backbone (every model, every matrix, both P₀ regimes):**
   `{10, 31, 37, 40, 41, 49, 53}` — **7 sites** (unchanged after the community correction)
-- **Cross-matrix constant-P₀ backbone:**
-  `{10, 15, 17, 31, 32, 37, 40, 41, 49, 51, 52, 53}` — **12 sites**
-- **Per-matrix constant-P₀ backbone (7 constant models each):**
-  Matrix 1: **17 sites** `{10, 15, 16, 17, 26, 28, 31, 32, 37, 40, 41, 44, 49, 51, 52, 53, 54}`
-  Matrix 2: **16 sites** `{10, 11, 12, 15, 17, 29, 31, 32, 36, 37, 40, 41, 49, 51, 52, 53}`
+
 
 The 7-site backbone is the practical takeaway: these reefs sit in dense subnetworks (high eigenvector centrality, high PageRank) or act as bridges (high betweenness), and every optimization method we ran selects them. **Any restoration design that omits them is structurally weaker.**
-
-### Surrogate fidelity (run_extra_experiments.py · E1)
-Scored under the true JARS ODE, the unconstrained MIQP selections recover **99.3% (M1)** and **98.9% (M2)** of the biomass attained by the best heuristic search — so the tractable static surrogate closely tracks the far more expensive dynamic model.
-
-### Equilibrium convergence / the `t = 1000` horizon (scripts/settling_time.py)
-Model time is in **years**. Total adult biomass establishes within a few decades — within 1% of equilibrium in roughly **30 yr on M1** and **60 yr on M2** — after which a slow tail set by the sediment compartment (`β = 0.01 yr⁻¹`, ~100-yr timescale) continues. Integrating to `t = 1000` places the reported `F(S)` on its steady-state plateau: extending to `t = 2000` changes `Σ Aₖ` by `< 1e-5` on both matrices.
-
-### Self-recruitment sensitivity (run_extra_experiments.py · E5)
-Zeroing the connectivity diagonal leaves the base/size **selections unchanged** and lowers the base objective by **~7% on M1 (14,785 → 13,692)** and **~4% on M2 (16,447 → 15,807)**. The cross-matrix and 7-site backbones are unaffected.
 
 ---
 

@@ -19,6 +19,7 @@ def evaluate_subset(
     P1scaling: float = config.P1SCALING,
     P0_mode: str = "realistic",
     consP0: float = config.CONST_P0,
+    return_densities: bool = False,
 ) -> float:
     """
     Core operation: run the JARS ODE on *just* the given site labels and
@@ -43,9 +44,13 @@ def evaluate_subset(
     consP0 : float
         Value used when P0_mode == "constant".
 
+    return_densities : bool
+        If True, also return {site_label: equilibrium adult density}.
+
     Returns
     -------
     float : total adults at t = tmax
+    (float, dict) if return_densities.
     """
     # turn into numpy array
     site_labels = np.array(site_labels, dtype=int)
@@ -89,4 +94,7 @@ def evaluate_subset(
 
     v_final = sol.y[:, -1]
     A_final = v_final[n:2*n]
+    if return_densities:
+        return (float(np.sum(A_final)),
+                {int(key_subset[i]): float(A_final[i]) for i in range(n)})
     return float(np.sum(A_final))

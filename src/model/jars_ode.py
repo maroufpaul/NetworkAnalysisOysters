@@ -133,43 +133,6 @@ def odesys(t, v, P0, P1, mu):
     return np.concatenate([dJ, dA, dR, dS])
 
 
-def run_full_jars_on_subset(site_labels,
-                            tmax: int = config.TMAX,
-                            P1scaling: float = config.P1SCALING,
-                            P0_mode: str = "constant",
-                            consP0: float = config.CONST_P0) -> float:
-    """
-    Convenience helper: load connectivity, restrict to given site_labels,
-    run the ODE to tmax, return total adult biomass. Handy for quick checks.
-    """
-    connectivity, key_all = load_connectivity()
-    site_labels = np.array(site_labels, dtype=int)
-    idx = sitetoindex(key_all, site_labels)
-    if len(idx) == 0:
-        return 0.0
-
-    P1 = P1scaling * connectivity[np.ix_(idx, idx)]
-    key_subset = key_all[idx]
-    Npatch = len(key_subset)
-
-    if P0_mode == "constant":
-        P0 = consP0 * np.ones(Npatch)
-    elif P0_mode == "realistic":
-        P0 = setP0(key_subset)
-    else:
-        P0 = np.zeros(Npatch)
-
-    mu = config.MU * np.ones(Npatch)
-
-    v0 = np.zeros(4 * Npatch)
-    v0[0:Npatch]          = config.IC["J"]
-    v0[Npatch:2*Npatch]   = config.IC["A"]
-    v0[2*Npatch:3*Npatch] = config.IC["R"]
-    v0[3*Npatch:4*Npatch] = config.IC["S"]
-
-    sol = solve_ivp(lambda t, v: odesys(t, v, P0, P1, mu),
-                    [0, tmax], v0, method="RK45", rtol=1e-6)
-
-    v_final = sol.y[:, -1]
-    A_final = v_final[Npatch:2*Npatch]
-    return float(np.sum(A_final))
+# run_full_jars_on_subset() removed: dead code (nothing called it) that
+# duplicated evaluator.evaluate_subset with a DIFFERENT default (P0_mode=
+# "constant" vs "realistic"). Use src.opt.evaluator.evaluate_subset.

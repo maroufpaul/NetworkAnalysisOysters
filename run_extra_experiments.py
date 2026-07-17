@@ -66,7 +66,11 @@ BACKBONE7  = [10,31,37,40,41,49,53]
 BACKBONE15 = {"M1":[10,15,16,28,31,32,37,40,41,44,49,51,52,53,54],
               "M2":[10,11,12,15,29,31,32,36,37,40,41,49,51,52,53]}
 
-def build_W(path, a_star=A_STAR, p1=P1SCALING, zero_diag=True):
+def build_W(path, a_star=A_STAR, p1=P1SCALING, zero_diag=False):
+    # DEFAULT FLIPPED: was zero_diag=True, so E3 (budget nesting) and E4
+    # solved a diagonal-zeroed model while the paper's Sec 5.7 describes
+    # them as 'the baseline model', which RETAINS self-recruitment.
+    # E5 passes zero_diag=True explicitly -- that is the sensitivity check.
     conn, key = load_connectivity(path)
     mask = ~np.isin(key, UNWANTED); key = key[mask]
     P = conn[np.ix_(mask, mask)] * p1

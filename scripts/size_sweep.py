@@ -127,7 +127,7 @@ def solve(matrix_id, model_short, T):
     a.eval("option solver gurobi;")
     a.eval(f"option gurobi_options '{config.GUROBI_OPTIONS}';")
     a.read(str(config.AMPL_DIR / model_file))
-    a.readData(str(config.AMPL_DIR / "oyster_quad.dat"))
+    a.readData(str(config.quad_dat(matrix_id)))
     for d in extra_dats:
         a.readData(str(config.AMPL_DIR / d))
     a.readData(str(TMP_SIZE_DAT))

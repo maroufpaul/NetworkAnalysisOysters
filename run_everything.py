@@ -113,29 +113,18 @@ def prepare(matrix_id):
                        cwd=str(ROOT), capture_output=True, text=True)
     if r.returncode != 0:
         print(r.stdout, r.stderr); raise RuntimeError("prepare_data failed")
-    dat = (AMPL_DIR/"oyster_quad.dat").read_text()
+    dat = config.quad_dat(matrix_id).read_text()
     return sum(1 for ln in dat.splitlines() if ln.strip().startswith("[")
                and ln.split("[")[1].split(",")[0].strip() == ln.split(",")[1].split("]")[0].strip())
 
 def solve_miqp(model, dats, objname, has_size, matrix_id):
-    from amplpy import AMPL
-    import pandas as pd
-    a = AMPL(); a.eval("option solver gurobi;")
-    a.eval(f"option gurobi_options '{config.GUROBI_OPTIONS}';")
-    a.read(str(AMPL_DIR/model)); a.readData(str(AMPL_DIR/"oyster_quad.dat"))
-    for d in dats: a.readData(str(AMPL_DIR/d))
-    a.eval("solve;")
-    lab = pd.read_csv(RUNS_DIR/f"oyster_index_mapping_matrix{matrix_id}.csv")["site_id"].tolist()
-    picked = [int(r[0]) for r in a.getVariable("x").getValues().to_list() if float(r[1]) > 0.5]
-    sites = sorted(lab[i] for i in picked); obj = float(a.getObjective(objname).value())
-    area = None; area_by_site = None
-    if has_size:
-        sv = {int(r[0]): float(r[1]) for r in a.getVariable("s").getValues().to_list()}
-        area = round(sum(sv.get(i, 0.0) for i in picked), 2)
-        # map AMPL index -> site label, keep only selected sites, sort by area desc
-        area_by_site = {lab[i]: round(sv.get(i, 0.0), 2) for i in picked}
-        area_by_site = dict(sorted(area_by_site.items(), key=lambda kv: (-kv[1], kv[0])))
-    return sites, obj, area, area_by_site
+    """Thin wrapper kept for call-site compatibility; the AMPL call now lives in
+    src/opt/miqp.py so run_miqp.py, run_iterated.py and this file cannot drift."""
+    from src.opt.miqp import solve
+    name = {"oyster_quad.mod": "base", "oyster_comm.mod": "comm",
+            "oyster_size.mod": "size", "oyster_comm_size.mod": "comm+size"}[model]
+    r = solve(name, matrix_id)
+    return r["sites"], r["obj"], r["total_area"], (r["sizes"] or None)
 
 MIQP_SPECS = [("Base","oyster_quad.mod",[],"score",False),
               ("+Comm","oyster_comm.mod",["oyster_comm.dat"],"Larvae",False),

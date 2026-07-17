@@ -66,6 +66,24 @@ DEFAULT_MATRIX = "M1"
 def matrix_key(matrix_id: str) -> str:
     return {"1": "M1", "2": "M2", "M1": "M1", "M2": "M2"}[str(matrix_id)]
 
+def matrix_num(matrix_id: str) -> str:
+    """CLI id or dict key -> "1" / "2"."""
+    return matrix_key(matrix_id)[-1]
+
+# --- AMPL data files ------------------------------------------------------- #
+# The surrogate data is PER MATRIX. It used to be a single ampl/oyster_quad.dat
+# that prepare_data overwrote on each pass of its --matrix both loop, so only
+# matrix 2 survived; run_miqp.py then read that file while using --matrix only to
+# pick the (identical) label mapping, and silently solved the wrong matrix.
+def quad_dat(matrix_id) -> Path:
+    return AMPL_DIR / f"oyster_quad_matrix{matrix_num(matrix_id)}.dat"
+
+def mapping_csv(matrix_id) -> Path:
+    return RUNS_DIR / f"oyster_index_mapping_matrix{matrix_num(matrix_id)}.csv"
+
+COMM_DAT = AMPL_DIR / "oyster_comm.dat"     # matrix-independent
+SIZE_DAT = AMPL_DIR / "oyster_size.dat"     # matrix-independent
+
 # --------------------------------------------------------------------------- #
 # Realistic external supply
 # --------------------------------------------------------------------------- #
@@ -127,4 +145,43 @@ SIZE_SWEEP = {
     "U": 50.0,           # uniform upper bound (acres)
     "Sbar": 20.0,
     "budgets": [300, 500, 750, 1000],   # slack = T/(K*U) = 0.24 / 0.40 / 0.60 / 0.80
+}
+
+# --------------------------------------------------------------------------- #
+# MIQP models  (scripts/run_miqp.py, run_everything.py)
+# --------------------------------------------------------------------------- #
+# name -> (model file, extra .dat attrs on this module, objective name, has size vars)
+# The objective is named differently in each .mod, which is why every caller used
+# to hardcode it.
+MIQP_MODELS = {
+    "base":      ("oyster_quad.mod",      [],                       "score",       False),
+    "comm":      ("oyster_comm.mod",      ["COMM_DAT"],             "Larvae",      False),
+    "size":      ("oyster_size.mod",      ["SIZE_DAT"],             "Larvae",      True),
+    "comm+size": ("oyster_comm_size.mod", ["COMM_DAT", "SIZE_DAT"], "TotalLarvae", True),
+}
+
+# --------------------------------------------------------------------------- #
+# Iterated surrogate, site-specific Pe  (scripts/run_iterated.py -> Tables 6, 7)
+# --------------------------------------------------------------------------- #
+# "fallback" = what an UNSELECTED candidate is worth at the next pass:
+#   "sticky"   keep its last value. A candidate never selected keeps A0 forever,
+#              so the iteration can return its first selection and halt.
+#   "isolated" revert to Abar_l, its equilibrium integrated ALONE.
+#   "network"  re-integrate it alone with external supply raised by the inflow it
+#              would receive from the CURRENT selected set (one-step lookahead).
+ITER = {
+    "fallback":   "network",
+    "rules":      ["sticky", "isolated", "network"],
+    "starts":     [None, 0.05675, 0.02, 0.20, 0.50],   # None = isolated densities
+    "max_passes": 12,
+}
+
+# A_* sweep for Table 6.
+A_STAR_SWEEP = [0.01, 0.02, 0.0435, 0.05675, 0.08, 0.1, 0.2, 0.35, 0.5]
+
+# Best ODE-driven designs under REALISTIC Pe (paper Table 3): the denominator for
+# every percentage reported by run_iterated.py.
+BEST_HEUR_REAL = {
+    "M1": [4,6,10,15,19,20,21,24,27,30,31,32,36,37,38,39,40,41,47,49,51,52,53,55,60],
+    "M2": [1,4,6,10,18,19,20,21,24,30,31,35,36,37,38,39,40,41,42,47,49,53,55,57,60],
 }

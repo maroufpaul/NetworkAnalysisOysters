@@ -213,9 +213,6 @@ Last full run, everything reproduced:
 | Table 6, all 18 cells + 4/6 distinct designs + 14.1/47.1 spread | ✅ exact |
 | Table 7, all 30 cells | ✅ exact |
 | Table 5 size sweep, Table 8 centrality | ✅ exact |
-| E4 invariance (Jaccard 1.0 across the A\*×P1 grid) | ✅ |
-| E5 (7.39% / 3.89% drop, selections unchanged) | ✅ |
-| `\|F(1000) − F(2000)\|` = 6.1e-06 / 5.6e-06 | ✅ under the stated 1e-5 |
  
 ---
  

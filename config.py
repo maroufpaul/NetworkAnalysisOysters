@@ -75,11 +75,20 @@ def matrix_num(matrix_id: str) -> str:
 # that prepare_data overwrote on each pass of its --matrix both loop, so only
 # matrix 2 survived; run_miqp.py then read that file while using --matrix only to
 # pick the (identical) label mapping, and silently solved the wrong matrix.
-def quad_dat(matrix_id) -> Path:
-    return AMPL_DIR / f"oyster_quad_matrix{matrix_num(matrix_id)}.dat"
+def quad_dat(matrix_id, p0="constant") -> Path:
+    """AMPL data for one matrix + one external-supply mode.
+
+    Four of these exist: {M1,M2} x {constant, realistic}. They used to be a
+    single oyster_quad.dat that got overwritten, which meant you could silently
+    solve the wrong matrix.
+    """
+    return AMPL_DIR / f"oyster_quad_M{matrix_num(matrix_id)}_{p0}.dat"
+
 
 def mapping_csv(matrix_id) -> Path:
+    """AMPL index <-> site label lookup, so you can read the .dat files."""
     return RUNS_DIR / f"oyster_index_mapping_matrix{matrix_num(matrix_id)}.csv"
+
 
 COMM_DAT = AMPL_DIR / "oyster_comm.dat"     # matrix-independent
 SIZE_DAT = AMPL_DIR / "oyster_size.dat"     # matrix-independent
@@ -185,3 +194,6 @@ BEST_HEUR_REAL = {
     "M1": [4,6,10,15,19,20,21,24,27,30,31,32,36,37,38,39,40,41,47,49,51,52,53,55,60],
     "M2": [1,4,6,10,18,19,20,21,24,30,31,35,36,37,38,39,40,41,42,47,49,53,55,57,60],
 }
+# Community display names (sizes 7/19/10/5/8 match the report's five regions).
+COMM_NAMES = {1: "Tangier", 2: "Tangier-Pocomoke", 3: "Pocomoke-Saxis",
+              4: "East Pocomoke", 5: "Saxis-Beasley"}

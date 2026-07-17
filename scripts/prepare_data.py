@@ -1,201 +1,155 @@
-# scripts/prepare_data.py
-#
-# ONE place that turns the raw inputs (a connectivity .xlsx + the communities
-# .xlsx) plus config.py into the three AMPL data files the MIQP models read:
-#
-#     ampl/oyster_quad_matrix{1,2}.dat   N, K, Pe, W   (per matrix)
-#     ampl/oyster_comm.dat   C1..C5 + rmin1..5     (communities + minimums)
-#     ampl/oyster_size.dat   L, U, TotReefSize, Sbar
-#
-# It also writes the AMPL-index <-> site-label mapping and a W preview, and it
-# REFUSES to run if the communities do not partition the 49 candidates. This is
-# what makes the community data impossible to silently break again: it is always
-# derived (with the label->index translation) and always verified.
-#
-# Every number comes from config.py. To experiment, edit config.py and re-run:
-#
-#     python -m scripts.prepare_data              # both matrices
-#     python -m scripts.prepare_data --matrix 1
-#
-# FIXED: the surrogate data used to go to a single ampl/oyster_quad.dat that this
-# script OVERWROTE on each pass of the --matrix both loop, so only matrix 2
-# survived on disk. run_miqp.py read that file and used --matrix only to choose
-# the label mapping -- which is identical for both matrices -- so it silently
-# solved M2 and wrote the answer to miqp_sites_matrix1.csv. Nothing errored.
-# Each matrix now has its own .dat, so the wrong-matrix run is inexpressible.
-#
-# (Previously this was prepare_miqp_data.py, which only wrote oyster_quad.dat and
-# left oyster_comm.dat / oyster_size.dat to be hand-maintained -- the source of
-# the stale, untranslated community file.)
+"""
+Turns the Excel files + config.py into the AMPL .dat files the MIQP reads.
 
+Run this before any MIQP. It writes:
+    ampl/oyster_quad_M{1,2}_{constant,realistic}.dat   <- one per matrix + P0 mode
+    ampl/oyster_comm.dat                               <- community sets
+    ampl/oyster_size.dat                               <- reef size bounds
+
+    python -m scripts.prepare_data              # all 4 combos
+    python -m scripts.prepare_data --matrix 1
+    python -m scripts.prepare_data --p0 realistic
+
+Heads up on indexing: AMPL uses 0..48, which are POSITIONS in
+config.CANDIDATE_SITES, not the real site labels. Everything written here is in
+AMPL index space. The mapping is saved to runs/ so you can translate back.
+"""
 import argparse
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 import config
+from src.model.jars_ode import setP0
 
+# site label -> AMPL index
 LAB2IDX = {int(lab): i for i, lab in enumerate(config.CANDIDATE_SITES)}
-N_SITES = len(config.CANDIDATE_SITES)
+N = len(config.CANDIDATE_SITES)
 
 
-# --------------------------------------------------------------------------- #
-# Connectivity -> base surrogate (oyster_quad.dat)
-# --------------------------------------------------------------------------- #
-def load_matrix(matrix_id: str):
-    """Read a connectivity .xlsx, drop UNWANTED, return (labels, P) in candidate
-    order. Asserts the kept labels match CANDIDATE_SITES exactly."""
+def load_matrix(matrix_id):
+    """Read a connectivity xlsx, drop the sites we don't want, return (labels, P1)."""
     key = config.matrix_key(matrix_id)
     arr = pd.read_excel(config.MATRICES[key], header=None).values
     labels = arr[0, 1:].astype(int)
     P = arr[1:, 1:].astype(float)
 
-    mask = ~np.isin(labels, config.UNWANTED)
-    labels = labels[mask]
-    P = P[np.ix_(mask, mask)]
+    keep = ~np.isin(labels, config.UNWANTED)
+    labels, P = labels[keep], P[np.ix_(keep, keep)]
 
-    if not np.array_equal(labels, config.CANDIDATE_SITES):
-        raise ValueError(
-            f"matrix {matrix_id}: kept labels do not match config.CANDIDATE_SITES "
-            f"(got {labels.tolist()})"
-        )
-    return labels, P
+    # if this ever fires, the xlsx and config disagree about the candidate list
+    assert np.array_equal(labels, config.CANDIDATE_SITES), \
+        f"matrix {matrix_id}: sites in the xlsx don't match config.CANDIDATE_SITES"
+
+    return labels, P * config.P1SCALING
 
 
-def write_quad_dat(matrix_id: str) -> int:
-    labels, P = load_matrix(matrix_id)
-    n = len(labels)
+def write_quad(matrix_id, p0_mode):
+    """Write N, K, Pe and W for one (matrix, P0 mode)."""
+    labels, P1 = load_matrix(matrix_id)
 
-    P = P * config.P1SCALING
-    W = P * (config.A_STAR ** config.ALPHA)         # self-recruitment KEPT (diagonal intact)
-    Pe = config.CONST_P0 * np.ones(n)
+    # W[l,k] = larvae going l -> k, with every source frozen at A_STAR.
+    # The diagonal stays: a reef feeds itself, same as the ODE.
+    W = P1 * (config.A_STAR ** config.ALPHA)
 
-    # mapping + preview (in site labels)
-    config.RUNS_DIR.mkdir(exist_ok=True)
-    pd.DataFrame({"index": np.arange(n), "site_id": labels}).to_csv(
-        config.mapping_csv(matrix_id), index=False)
-    pd.DataFrame(W, index=labels, columns=labels).to_csv(
-        config.RUNS_DIR / f"oyster_data_preview_matrix{matrix_id}.csv")
+    # constant = everyone gets the same external supply (isolates the network).
+    # realistic = the low/moderate/high classes from VOSARA.
+    Pe = (np.full(N, config.CONST_P0) if p0_mode == "constant"
+          else setP0(labels).astype(float))
 
-    out = config.quad_dat(matrix_id)
-    lines = [f"# auto-generated by scripts/prepare_data.py (matrix {matrix_id})",
-             "# self-recruitment (diagonal) retained, matching the JARS ODE", "",
+    out = config.quad_dat(matrix_id, p0_mode)
+    lines = [f"# generated by prepare_data.py -- matrix {matrix_id}, P0 = {p0_mode}",
+             "# indices are positions in config.CANDIDATE_SITES, NOT site labels", "",
              "set N :="]
-    lines += [f"  {i}" for i in range(n)]
+    lines += [f"  {i}" for i in range(N)]
     lines += [";", "", f"param K := {config.K};", "", "param Pe :="]
-    lines += [f"  {i} {Pe[i]:.4f}" for i in range(n)]
+    lines += [f"  {i} {Pe[i]:.6f}" for i in range(N)]
     lines += [";", "", "param W :="]
-    diag = 0
-    for i in range(n):
-        for j in range(n):
-            if W[i, j] != 0.0:
-                lines.append(f"  [{i}, {j}] {W[i, j]:.6f}")
-                if i == j:
-                    diag += 1
+    lines += [f"  [{i}, {j}] {W[i, j]:.6f}"
+              for i in range(N) for j in range(N) if W[i, j] != 0]
     lines += [";", ""]
     out.write_text("\n".join(lines), encoding="utf-8")
-    print(f"[prepare] wrote {out}  ({diag} diagonal entries kept)")
-    return diag
+
+    diag = int((np.diag(W) != 0).sum())
+    print(f"  wrote {out.name}  ({diag} self-recruitment entries kept)")
+
+    # so you can turn AMPL indices back into site labels later
+    config.RUNS_DIR.mkdir(exist_ok=True)
+    pd.DataFrame({"index": np.arange(N), "site_id": labels}).to_csv(
+        config.mapping_csv(matrix_id), index=False)
 
 
-# --------------------------------------------------------------------------- #
-# Communities (oyster_comm.dat)  -- the formerly-broken file
-# --------------------------------------------------------------------------- #
-def read_communities() -> dict:
-    """Parse config.COMMUNITIES_XLSX into {comm_number: [site_label, ...]}.
-    Layout per row: comm_number | size | label_1 label_2 ..."""
+def write_comm():
+    """Community sets. The xlsx lists site LABELS, AMPL wants indices, so translate."""
     raw = pd.read_excel(config.COMMUNITIES_XLSX, header=None).values
     comms = {}
     for r in range(1, raw.shape[0]):
         if pd.isna(raw[r, 0]):
             continue
-        cnum = int(raw[r, 0]); size = int(raw[r, 1])
+        cnum, size = int(raw[r, 0]), int(raw[r, 1])
         labs = [int(v) for v in raw[r, 2:] if not pd.isna(v)]
-        if len(labs) != size:
-            raise ValueError(f"C{cnum}: stated size {size} != {len(labs)} labels listed")
+        assert len(labs) == size, f"C{cnum}: says {size} sites but lists {len(labs)}"
         comms[cnum] = sorted(labs)
+
+    # the communities have to be a clean partition of the 49 candidates, or the
+    # MIQP is quietly solving a different problem than you think
+    flat = [l for v in comms.values() for l in v]
+    assert len(flat) == len(set(flat)), "a site is in two communities"
+    assert set(flat) == set(int(s) for s in config.CANDIDATE_SITES), \
+        "communities don't cover exactly the 49 candidates"
+
+    lines = ["# generated by prepare_data.py from " + config.COMMUNITIES_XLSX.name,
+             "# these are AMPL INDICES, not site labels", ""]
+    for c in sorted(comms):
+        lines.append(f"# C{c} = {config.COMM_NAMES[c]}: sites {comms[c]}")
+        lines.append(f"set C{c} :=")
+        lines += [f"  {LAB2IDX[l]}" for l in comms[c]]
+        lines += [";", ""]
+    lines += [f"param rmin{c} := {config.COMMUNITY_MINS[c]};" for c in sorted(comms)]
+    lines.append("")
+    config.COMM_DAT.write_text("\n".join(lines), encoding="utf-8")
+    print(f"  wrote {config.COMM_DAT.name}  "
+          f"(sizes {[len(comms[c]) for c in sorted(comms)]}, partition OK)")
     return comms
 
 
-def verify_partition(comms: dict) -> None:
-    cand = set(int(s) for s in config.CANDIDATE_SITES)
-    flat = [l for labs in comms.values() for l in labs]
-    seen = set(flat)
-    dupes   = sorted(x for x in seen if flat.count(x) > 1)
-    extra   = sorted(seen - cand)
-    missing = sorted(cand - seen)
-    if dupes or extra or missing:
-        raise ValueError(
-            "communities do NOT partition the 49 candidates:\n"
-            f"  duplicates              : {dupes or 'none'}\n"
-            f"  in community not candidate: {extra or 'none'}\n"
-            f"  candidate with no community: {missing or 'none'}")
-    print(f"[prepare] community partition OK: {len(comms)} communities, "
-          f"sizes {[len(comms[c]) for c in sorted(comms)]}, cover all {len(cand)} candidates")
-
-
-def write_comm_dat() -> None:
-    comms = read_communities()
-    verify_partition(comms)
-
-    out = config.COMM_DAT
-    lines = ["# auto-generated by scripts/prepare_data.py from data/communitiesJune2002.xlsx",
-             "# values are AMPL INDICES (positions in CANDIDATE_SITES), NOT site labels",
-             "# C1..C5 partition all 49 candidates; minimums rmin1..5 come from config", ""]
-    for c in sorted(comms):
-        idxs = sorted(LAB2IDX[l] for l in comms[c])
-        lines.append(f"# C{c}: labels {comms[c]}")
-        lines.append(f"set C{c} :=")
-        lines += [f"  {i}" for i in idxs]
-        lines += [";", ""]
-    lines.append("# community minimums (config.COMMUNITY_MINS)")
-    for c in sorted(config.COMMUNITY_MINS):
-        lines.append(f"param rmin{c} := {config.COMMUNITY_MINS[c]};")
-    lines.append("")
-    out.write_text("\n".join(lines), encoding="utf-8")
-    print(f"[prepare] wrote {out}")
-
-
-# --------------------------------------------------------------------------- #
-# Reef sizing (oyster_size.dat)
-# --------------------------------------------------------------------------- #
-def write_size_dat() -> None:
+def write_size():
+    """Reef size bounds. Note U is tiered by index -- that's from the original
+    testbed, not biology. size_sweep.py redoes it with uniform bounds."""
     s = config.SIZE
-    out = config.SIZE_DAT
-    lines = ["# auto-generated by scripts/prepare_data.py from config.SIZE",
-             "# matrix-independent (constants only)", "", "param L :="]
-    lines += [f"  {i} {s['L']:.6f}" for i in range(N_SITES)]
+    lines = ["# generated by prepare_data.py from config.SIZE", "", "param L :="]
+    lines += [f"  {i} {s['L']:.6f}" for i in range(N)]
     lines += [";", "", "param U :="]
-    for i in range(N_SITES):
-        u = s["U_FIRST"] if i < s["U_SPLIT"] else s["U_REST"]
-        lines.append(f"  {i} {u:.6f}")
-    lines += [";", "",
-              f"param TotReefSize := {s['TotReefSize']:.2f};", "",
+    lines += [f"  {i} {(s['U_FIRST'] if i < s['U_SPLIT'] else s['U_REST']):.6f}"
+              for i in range(N)]
+    lines += [";", "", f"param TotReefSize := {s['TotReefSize']:.2f};", "",
               f"param Sbar := {s['Sbar']:g};", ""]
-    out.write_text("\n".join(lines), encoding="utf-8")
-    print(f"[prepare] wrote {out}")
+    config.SIZE_DAT.write_text("\n".join(lines), encoding="utf-8")
+    print(f"  wrote {config.SIZE_DAT.name}  "
+          f"(L={s['L']:g}, U={s['U_FIRST']:g}/{s['U_REST']:g}, T={s['TotReefSize']:g})")
 
 
-# --------------------------------------------------------------------------- #
 def main():
-    ap = argparse.ArgumentParser(description="Generate all AMPL .dat files from config + xlsx.")
+    ap = argparse.ArgumentParser()
     ap.add_argument("--matrix", choices=["1", "2", "both"], default="both")
+    ap.add_argument("--p0", choices=["constant", "realistic", "both"], default="both")
     args = ap.parse_args()
 
     config.AMPL_DIR.mkdir(exist_ok=True)
     config.RUNS_DIR.mkdir(exist_ok=True)
 
-    # communities + sizing are matrix-independent -> write once
-    write_comm_dat()
-    write_size_dat()
+    print("communities + sizes (same for every matrix):")
+    write_comm()
+    write_size()
 
-    for m in (["1", "2"] if args.matrix == "both" else [args.matrix]):
-        print(f"\n[prepare] --- matrix {m} ---")
-        write_quad_dat(m)
+    mats = ["1", "2"] if args.matrix == "both" else [args.matrix]
+    modes = ["constant", "realistic"] if args.p0 == "both" else [args.p0]
+    print("\nconnectivity:")
+    for m in mats:
+        for mode in modes:
+            write_quad(m, mode)
 
-    print("\n[prepare] done. Each matrix has its own .dat; no file is "
-          "overwritten by another matrix.")
+    print("\ndone")
 
 
 if __name__ == "__main__":

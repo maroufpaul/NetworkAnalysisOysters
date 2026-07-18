@@ -133,6 +133,3 @@ def odesys(t, v, P0, P1, mu):
     return np.concatenate([dJ, dA, dR, dS])
 
 
-# run_full_jars_on_subset() removed: dead code (nothing called it) that
-# duplicated evaluator.evaluate_subset with a DIFFERENT default (P0_mode=
-# "constant" vs "realistic"). Use src.opt.evaluator.evaluate_subset.

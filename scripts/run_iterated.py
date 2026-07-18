@@ -114,11 +114,12 @@ def network_fallback_densities(
     # Current selected reefs are fixed sources during this one-step lookahead.
     # (evaluate_subset already clips, so these are >= 0.)
     source_A = np.array([densities[int(site)] for site in picked], dtype=float)
+    # This gives incoming larvae to every candidate from the selected network.
+    # Rows are sources, columns are destinations, so the transpose lines everything up.
     incoming = P1[picked_idx, :].T @ (source_A ** config.ALPHA)
 
     A_next = np.zeros(len(labels), dtype=float)
 
-    # Selected reefs keep their actual full-network JARS densities.
     for site, density in densities.items():
         A_next[pos[int(site)]] = max(float(density), 0.0)
 
@@ -169,7 +170,6 @@ def solve_miqp(
     try:
         ampl.eval("option solver gurobi;")
 
-        # Keep research settings, but do not print the solver banner/options.
         solver_options = f"{config.GUROBI_OPTIONS} outlev=0"
         ampl.eval(f"option gurobi_options '{solver_options}';")
         ampl.eval("option solver_msg 0;")
@@ -210,9 +210,11 @@ def iterate(
     trace: bool = False,
 ) -> dict[str, Any]:
     """Alternate MIQP and JARS updates until a set repeats."""
+    # We need this lookup later when the JARS densities come back keyed by real site label.
     pos = {int(label): i for i, label in enumerate(labels)}
     A = np.array(A0, dtype=float)
 
+    # history tracks the selected sets so we can spot a fixed point or a cycle.
     history: list[tuple[int, ...]] = []
     score_by_set: dict[tuple[int, ...], float] = {}
     selected_ode_runs = 0
@@ -258,15 +260,12 @@ def iterate(
             print(f"      round {step}: F={score:.6f}")
 
         if fallback == "sticky":
-            # Outsiders keep the estimates they had last round.
             A_next = A.copy()
 
         elif fallback == "isolated":
-            # Outsiders return to their precomputed stand-alone densities.
             A_next = alone.copy()
 
         elif fallback == "network":
-            # Each outsider is tested with inflow from the current network.
             A_next, runs = network_fallback_densities(
                 labels, P1, Pe, picked, densities
             )
@@ -275,8 +274,8 @@ def iterate(
         else:
             raise ValueError(f"Unknown fallback rule: {fallback}")
 
+        # Sticky and isolated only set the outsider values above, so we still plug in the real selected densities here.
         if fallback != "network":
-            # Selected reefs always use their realized JARS densities.
             for site, density in densities.items():
                 A_next[pos[int(site)]] = max(float(density), 0.0)
 
@@ -307,6 +306,7 @@ def exp_astar(mats: list[str]) -> None:
         print(f"M{matrix_id} benchmark F={best:.6f}")
         print(f"  {'A_STAR':>8}  {'F':>10}  {'% best':>8}")
 
+        # designs tells us how many genuinely different site sets the sweep produced.
         designs = set()
         matrix_rows = []
 
@@ -358,9 +358,10 @@ def exp_iterated(
     for matrix_id in mats:
         conn, key, labels, P1, Pe = load(matrix_id)
 
-        # Reused by every start and fallback for this matrix.
+        # Precompute these once. No reason to rerun the same 49 isolated ODEs for every start.
         alone = alone_densities(P1, Pe)
         best = F(config.BEST_HEUR_REAL[f"M{matrix_id}"], conn, key)
+        # A reef counts as "dead alone" if its isolated equilibrium is basically zero.
         dead = int((alone <= 1e-6).sum())
 
         print(
@@ -374,6 +375,7 @@ def exp_iterated(
 
         for rule in rules:
             for start in config.ITER["starts"]:
+                # None means use the isolated-density vector; numbers mean give every site that same starting A.
                 name = "alone" if start is None else str(start)
                 A0 = alone.copy() if start is None else np.full(len(labels), float(start))
 
@@ -485,6 +487,7 @@ def main() -> None:
     mats = ["1", "2"] if args.matrix == "both" else [args.matrix]
     rules = config.ITER["rules"] if args.fallback == "all" else [args.fallback]
 
+    # prepare_data creates the mapping files. Better to fail here than halfway through a long run.
     for matrix_id in mats:
         if not config.mapping_csv(matrix_id).exists():
             raise SystemExit("run: python -m scripts.prepare_data")

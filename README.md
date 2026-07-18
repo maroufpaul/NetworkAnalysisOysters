@@ -220,12 +220,12 @@ The MIQP scripts (`run_miqp`, `run_iterated`, `size_sweep`, `run_extra`) need
 **AMPL** and **Gurobi**. Both are commercial but **free for academics**. (The
 `run_heuristics` layer needs neither.)
 
-- **Gurobi** — get an academic license key from the [Gurobi User Portal](https://portal.gurobi.com/),
+- **Gurobi** — get an academic license key from the [Gurobi for academis](https://www.gurobi.com/academics),
   then run `grbgetkey <your-key>`. This writes `gurobi.lic` to your home folder,
   where the solver finds it automatically. Set `GRB_LICENSE_FILE` if you put it
-  elsewhere.
-- **AMPL** — `pip install amplpy` ships a community edition that covers a model
-  this size. Academic AMPL licenses are often temporary, so check the expiry.
+  elsewhere. Follow the directions on their website to set it up correctly.
+- **AMPL** — `amplpy` ships a community edition that covers a model
+  this size.
 
 ### Verify AMPL and Gurobi
 

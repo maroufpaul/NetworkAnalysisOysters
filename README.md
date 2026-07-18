@@ -51,7 +51,7 @@ The pipeline has three modeling layers:
 | `scripts/run_iterated.py` | MIQP, **realistic `P₀`**: the frozen-`A*` failure, then the ODE-feedback fix. |
 | `scripts/run_extra.py` | Backbone, surrogate fidelity, K sweep, self-recruitment. Reads what the others wrote. |
 
-Plus three utilities: `size_sweep.py` (reef area vs budget), `network_core_analysis.py` (centrality), `settling_time.py` (why `t = 1000`), and `check_ampl_env.py` (is the solver wired up).
+Plus utilities: `size_sweep.py` (reef area vs budget), `network_core_analysis.py` (centrality), `settling_time.py` (why `t = 1000`), `run_jars.py` (run the JARS ODE on any reef set from the terminal), and `check_ampl_env.py` (is the solver wired up).
 
 ---
 
@@ -71,7 +71,7 @@ NetworkAnalysisOysters/
 │   ├── run_iterated.py                # MIQP, realistic P0: the problem + the ODE fix
 │   ├── run_extra.py                   # backbone, fidelity, K sweep, self-recruitment
 │   ├── size_sweep.py                  # reef area vs budget, uniform bounds
-|   ├── run_jars.py                    # run JARS ODE
+│   ├── run_jars.py                    # run JARS on any reef set from the terminal
 │   ├── network_core_analysis.py       # centrality of all 49 sites
 │   ├── settling_time.py               # equilibrium-convergence check (t = 1000)
 │   └── check_ampl_env.py              # is AMPL + Gurobi actually on PATH?
@@ -405,6 +405,29 @@ Under constant `P₀` that's fine: every reef settles near the same density, and
 | **Iterated surrogate** | Per-source densities refreshed from one ODE per round | Restores accuracy under realistic `P₀` |
 
 ---
+
+### Inspecting reefs directly — `run_jars.py`
+
+A small utility to run the JARS biology simulation on any reef set straight from
+the terminal — no Python needed. Useful for sanity-checking a design or seeing
+the network effect for yourself. Pass site **labels** (10, 37, …), not the 0–48
+AMPL indices.
+
+```bash
+python -m scripts.run_jars --sites 37                  # one reef, all 4 matrix×supply combos
+python -m scripts.run_jars --sites 10 31 37 40 41 49 53 --densities   # a set, with per-reef adults
+python -m scripts.run_jars --all                       # all 49 candidates
+python -m scripts.run_jars --each --sites 10 37 41     # each reef ALONE (isolated), batched
+```
+
+Defaults to both matrices × both supply modes; narrow with `--matrix 1|2` and
+`--p0 constant|realistic`. `--densities` prints each reef's own adult density (not
+just the total F); `--each` runs every listed reef in isolation; `--csv PATH`
+saves the per-reef numbers.
+
+Handy contrast: `--each` shows reef 41 dies alone (F ≈ 0), but in the backbone
+set it survives at ~0.087 — the clearest one-command demonstration of why these
+are *network* sites, not standalone ones.
 
 ## 📊 Key Results
 

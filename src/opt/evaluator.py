@@ -94,6 +94,14 @@ def evaluate_subset(
 
     v_final = sol.y[:, -1]
     A_final = v_final[n:2*n]
+
+    # A site that goes extinct lands on ~ -5e-10 instead of exactly 0 -- that's
+    # just integrator noise, and negative oysters aren't a thing. Clip it here so
+    # nobody downstream ends up doing (-5e-10) ** 1.72 and getting NaN. (The ODE
+    # itself never trips on this because odesys uses np.abs(A) ** ALPHA
+    # internally, so the problem only shows up once you take these densities out
+    # and build surrogate weights with them.)
+    A_final = np.maximum(A_final, 0.0)
     if return_densities:
         return (float(np.sum(A_final)),
                 {int(key_subset[i]): float(A_final[i]) for i in range(n)})

@@ -112,10 +112,8 @@ def network_fallback_densities(
     picked_idx = np.array([pos[int(site)] for site in picked], dtype=int)
 
     # Current selected reefs are fixed sources during this one-step lookahead.
-    source_A = np.maximum(
-        np.array([densities[int(site)] for site in picked], dtype=float),
-        0.0,
-    )
+    # (evaluate_subset already clips, so these are >= 0.)
+    source_A = np.array([densities[int(site)] for site in picked], dtype=float)
     incoming = P1[picked_idx, :].T @ (source_A ** config.ALPHA)
 
     A_next = np.zeros(len(labels), dtype=float)
@@ -145,6 +143,9 @@ def solve_miqp(
 ) -> list[int]:
     """Solve the source-specific MIQP for the current density estimates."""
     # One source density scales that source's entire outgoing row.
+    # The clip is the last line of defense: A ** 1.72 is NaN for any negative A,
+    # and a NaN here would sail into the .dat file and violate `param W >= 0`.
+    # Everything feeding A is already non-negative, so this should never fire.
     W = P1 * (np.maximum(A, 0.0) ** config.ALPHA)[:, None]
     n = len(labels)
 

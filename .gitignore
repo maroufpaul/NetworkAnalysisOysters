@@ -14,7 +14,4 @@ runs/*
 !runs/oyster_index_mapping_matrix1.csv
 !runs/oyster_index_mapping_matrix2.csv
 
-# Generated AMPL data (regenerate with `python -m scripts.prepare_data`)
-ampl/oyster_quad.dat
-ampl/oyster_comm.dat
-ampl/oyster_size.dat
+

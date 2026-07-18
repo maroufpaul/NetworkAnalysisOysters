@@ -2,8 +2,7 @@
 #
 # Single source of truth for the Oyster Reef Site Selection pipeline.
 # Every script and model parameter is read from here. To run a new experiment,
-# change a value in this file and re-run `python -m scripts.prepare_data` (which
-# regenerates the AMPL .dat files) followed by `python run_everything.py`.
+# change a value in this file and re-run `python -m scripts.prepare_data`
 #
 # Nothing in this file imports from `src/`, so it can be imported anywhere
 # without circular-import problems.
@@ -157,7 +156,7 @@ SIZE_SWEEP = {
 }
 
 # --------------------------------------------------------------------------- #
-# MIQP models  (scripts/run_miqp.py, run_everything.py)
+# MIQP models  (scripts/run_miqp.py)
 # --------------------------------------------------------------------------- #
 # name -> (model file, extra .dat attrs on this module, objective name, has size vars)
 # The objective is named differently in each .mod, which is why every caller used
@@ -197,3 +196,9 @@ BEST_HEUR_REAL = {
 # Community display names (sizes 7/19/10/5/8 match the report's five regions).
 COMM_NAMES = {1: "Tangier", 2: "Tangier-Pocomoke", 3: "Pocomoke-Saxis",
               4: "East Pocomoke", 5: "Saxis-Beasley"}
+
+
+
+# The 7 sites every method picks. This is a RESULT (run_extra --exp backbone
+# finds it), not an input -- it's only here so size_sweep can highlight them.
+BACKBONE = [10, 31, 37, 40, 41, 49, 53]

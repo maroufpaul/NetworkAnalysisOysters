@@ -1,277 +1,258 @@
-# scripts/size_sweep.py
-#
-# Reef-size BUDGET SWEEP experiment.
-#
-# Question: when the area budget binds, does the optimizer concentrate acreage on
-# connectivity hubs, or is the allocation just an artifact of the (index-based)
-# ceiling tiering in the canonical model?
-#
-# Method: use UNIFORM bounds (config.SIZE_SWEEP.L / .U for every site) so no site
-# has a built-in acreage advantage, then sweep the total budget T across the
-# binding band and record, per site, how many acres it receives at each T.
-#
-# For each (matrix, budget T):
-#   1. regenerate oyster_quad.dat for the matrix (via prepare_data),
-#   2. write a temporary uniform-bounds size .dat with that T,
-#   3. solve +Size (or +Comm+Size) with Gurobi,
-#   4. record the objective and per-site area.
-#
-# Outputs:
-#   runs/size_sweep.csv          long format: matrix, model, T, site, selected, area, backbone
-#   runs/size_sweep_summary.txt  human-readable grouped allocations per (matrix, T)
-#   figures/size_sweep_matrix{1,2}.png   per-site acres vs T (if matplotlib present)
-#
-# The canonical ampl/oyster_size.dat is NEVER modified (this writes its own temp
-# file), so run_everything.py still reproduces the published +Size numbers.
-#
-# Usage:
-#   python -m scripts.size_sweep                       # both matrices, +Size, default budgets
-#   python -m scripts.size_sweep --matrix 1
-#   python -m scripts.size_sweep --model comm_size
-#   python -m scripts.size_sweep --budgets 200 400 600 800 1000
-#   python -m scripts.size_sweep --no-plot
+"""
+Reef-size budget sweep.
 
+The question: when you can't afford to max out every reef, where does the
+optimizer spend the acres?
+
+The canonical size model can't answer that honestly, because its ceiling is
+tiered by a site's POSITION in the list (config.SIZE.U_SPLIT: first 26 get 50
+acres, the rest get 40). So "site X got 50 and site Y got 40" tells you nothing
+about X and Y. Here every site gets the SAME bounds, and we sweep the budget
+instead. Now if acreage piles up somewhere, that's the network talking.
+
+The budget has to actually bind or there's nothing to see: below L*K=125 acres
+everything is pinned to the floor, above U*K=1250 everything can max out. So we
+sweep in between.
+
+    python -m scripts.size_sweep                        # both matrices
+    python -m scripts.size_sweep --matrix 1
+    python -m scripts.size_sweep --model comm+size      # with the equity constraint
+    python -m scripts.size_sweep --budgets 200 400 600 800 1000
+    python -m scripts.size_sweep --no-plot
+
+Writes runs/size_sweep.csv, runs/size_sweep_summary.txt,
+figures/size_sweep_matrix{1,2}.png
+"""
 import argparse
 import csv
-import json
-from pathlib import Path
+from collections import defaultdict
+
+import numpy as np
+import pandas as pd
+from amplpy import AMPL
 
 import config
-
-TMP_SIZE_DAT = config.AMPL_DIR / "_sweep_size.dat"
-
-MODELS = {
-    # short   : (model file,            extra dats,            objective name)
-    "size":      ("oyster_size.mod",      [],                    "Larvae"),
-    "comm_size": ("oyster_comm_size.mod", ["oyster_comm.dat"],   "TotalLarvae"),
-}
+from src.model.jars_ode import load_connectivity
 
 
-def backbone_set():
-    """7-site global backbone from references.json (fallback to the known set)."""
-    try:
-        d = json.loads((config.ROOT / "references.json").read_text())
-        return set(d["backbone"]["global"])
-    except Exception:
-        return {10, 31, 37, 40, 41, 49, 53}
+def load_communities():
+    """{community number: [site labels]} from the xlsx."""
+    raw = pd.read_excel(config.COMMUNITIES_XLSX, header=None).values
+    out = {}
+    for r in range(1, raw.shape[0]):
+        if not pd.isna(raw[r, 0]):
+            out[int(raw[r, 0])] = sorted(int(v) for v in raw[r, 2:] if not pd.isna(v))
+    return out
+
+TMP_DAT = config.AMPL_DIR / "_sweep_size.dat"   # our own bounds; the real
+                                                # ampl/oyster_size.dat is left alone
 
 
-def load_strength_ranks(matrix_id):
-    """Parse runs/network_ranking_matrix{mid}_selfloops_on.txt (if present) into
-    {site: {'out': rank, 'in': rank, 'self': value}}. Ranks are 1 = strongest.
-    Returns {} if the file isn't there (annotation is then skipped)."""
-    path = config.RUNS_DIR / f"network_ranking_matrix{matrix_id}_selfloops_on.txt"
-    if not path.exists():
-        return {}
-    recs = {}
-    in_table = False
-    for ln in path.read_text().splitlines():
-        s = ln.strip()
-        if s.startswith("site_id") and "out_strength" in s:
-            in_table = True; continue
-        if in_table:
-            if not s or s.startswith("Backbone") or ":" in s:
-                break
-            parts = s.replace(",", "").split()
-            if len(parts) < 4 or not parts[0].isdigit():
-                continue
-            site = int(parts[0])
-            # cols: site_id backbone out_strength in_strength self_recruitment ...
-            recs[site] = {"out_val": float(parts[2]), "in_val": float(parts[3]),
-                          "self": float(parts[4])}
-    if not recs:
-        return {}
-    # convert values to ranks (1 = largest)
-    def ranks(key):
-        order = sorted(recs, key=lambda k: -recs[k][key])
-        return {site: i + 1 for i, site in enumerate(order)}
-    ro, ri = ranks("out_val"), ranks("in_val")
-    return {site: {"out": ro[site], "in": ri[site], "self": recs[site]["self"]}
-            for site in recs}
+def strengths(matrix_id):
+    """How much each reef sends out and takes in, straight from the connectivity
+    matrix. Ignores the diagonal -- a reef feeding itself isn't 'sending' anywhere.
+    Returns {site: (out_rank, in_rank, self_recruitment)}, rank 1 = biggest."""
+    conn, key = load_connectivity(config.MATRICES[config.matrix_key(matrix_id)])
+    keep = ~np.isin(key, config.UNWANTED)
+    labels, P = key[keep], conn[np.ix_(keep, keep)] * config.P1SCALING
+
+    diag = np.diag(P).copy()
+    off = P.copy()
+    np.fill_diagonal(off, 0.0)
+    out, inn = off.sum(axis=1), off.sum(axis=0)
+
+    # rank 1 = biggest
+    out_rank = {labels[i]: r + 1 for r, i in enumerate(np.argsort(-out))}
+    in_rank = {labels[i]: r + 1 for r, i in enumerate(np.argsort(-inn))}
+    return {int(labels[i]): (out_rank[labels[i]], in_rank[labels[i]], diag[i])
+            for i in range(len(labels))}
 
 
-def write_uniform_size_dat(n, L, U, T, Sbar, path):
-    """Write a size .dat with the SAME L and U for all n sites and budget T."""
-    lines = [f"# TEMPORARY uniform-bounds size data (L={L}, U={U}, T={T}) for size_sweep.py",
-             "", "param L :="]
+def write_size_dat(n, L, U, T):
+    """Same L and U for every site, budget T. That's the whole trick."""
+    lines = [f"# temp file from size_sweep.py -- uniform L={L}, U={U}, T={T}", "",
+             "param L :="]
     lines += [f"  {i} {L:.6f}" for i in range(n)]
     lines += [";", "", "param U :="]
     lines += [f"  {i} {U:.6f}" for i in range(n)]
-    lines += [";", "", f"param TotReefSize := {T:.2f};", "", f"param Sbar := {Sbar:g};", ""]
-    path.write_text("\n".join(lines), encoding="utf-8")
+    lines += [";", "", f"param TotReefSize := {T:.2f};", "",
+              f"param Sbar := {config.SIZE_SWEEP['Sbar']:g};", ""]
+    TMP_DAT.write_text("\n".join(lines), encoding="utf-8")
 
 
-def prepare_quad(matrix_id):
-    """Regenerate oyster_quad.dat + the mapping CSV for this matrix."""
-    import subprocess, sys
-    r = subprocess.run([sys.executable, "-m", "scripts.prepare_data", "--matrix", matrix_id],
-                       cwd=str(config.ROOT), capture_output=True, text=True)
-    if r.returncode != 0:
-        print(r.stdout, r.stderr)
-        raise RuntimeError("prepare_data failed")
-
-
-def solve(matrix_id, model_short, T):
-    """Solve the sizing model at budget T; return (objective, {site_label: acres})."""
-    from amplpy import AMPL
-    import pandas as pd
-
-    model_file, extra_dats, objname = MODELS[model_short]
-    labels = pd.read_csv(config.RUNS_DIR / f"oyster_index_mapping_matrix{matrix_id}.csv")["site_id"].tolist()
-    n = len(labels)
-
-    s = config.SIZE_SWEEP
-    write_uniform_size_dat(n, s["L"], s["U"], T, s["Sbar"], TMP_SIZE_DAT)
+def solve(matrix_id, model, T):
+    """Solve the sizing model at budget T. Returns (objective, {site: acres})."""
+    model_file, extra_dats, objname, _ = config.MIQP_MODELS[model]
+    labels = pd.read_csv(config.mapping_csv(matrix_id))["site_id"].tolist()
+    write_size_dat(len(labels), config.SIZE_SWEEP["L"], config.SIZE_SWEEP["U"], T)
 
     a = AMPL()
     a.eval("option solver gurobi;")
-    a.eval(f"option gurobi_options '{config.GUROBI_OPTIONS}';")
+    # outlev=0 stops the driver echoing "nonconvex=2 mipgap=1e-9" and its banner
+    # on every single solve; solver_msg 0 kills the rest of AMPL's chatter.
+    a.eval(f"option gurobi_options '{config.GUROBI_OPTIONS} outlev=0';")
+    a.eval("option solver_msg 0;")
     a.read(str(config.AMPL_DIR / model_file))
-    a.readData(str(config.quad_dat(matrix_id)))
-    for d in extra_dats:
-        a.readData(str(config.AMPL_DIR / d))
-    a.readData(str(TMP_SIZE_DAT))
+    a.readData(str(config.quad_dat(matrix_id, "constant")))
+    if "COMM_DAT" in extra_dats:
+        a.readData(str(config.COMM_DAT))
+    a.readData(str(TMP_DAT))          # our uniform bounds, NOT config.SIZE_DAT
     a.eval("solve;")
 
-    xvals = {int(r[0]): float(r[1]) for r in a.getVariable("x").getValues().to_list()}
-    svals = {int(r[0]): float(r[1]) for r in a.getVariable("s").getValues().to_list()}
+    if a.getValue("solve_result") != "solved":
+        raise RuntimeError(f"M{matrix_id} T={T}: AMPL said '{a.getValue('solve_result')}'")
+
+    x = {int(r[0]): float(r[1]) for r in a.getVariable("x").getValues().to_list()}
+    s = {int(r[0]): float(r[1]) for r in a.getVariable("s").getValues().to_list()}
     obj = float(a.getObjective(objname).value())
-    area = {labels[i]: round(svals.get(i, 0.0), 3) for i in range(n) if xvals.get(i, 0) > 0.5}
-    return obj, area
+    a.close()
+
+    acres = {labels[i]: round(s.get(i, 0.0), 2)
+             for i in range(len(labels)) if x.get(i, 0) > 0.5}
+    return obj, acres
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Reef-size budget sweep with uniform bounds.")
+    ap = argparse.ArgumentParser()
     ap.add_argument("--matrix", choices=["1", "2", "both"], default="both")
-    ap.add_argument("--model", choices=list(MODELS), default="size")
-    ap.add_argument("--budgets", type=float, nargs="+", default=None,
-                    help="override config.SIZE_SWEEP['budgets']")
+    ap.add_argument("--model", choices=["size", "comm+size"], default="size")
+    ap.add_argument("--budgets", type=float, nargs="+", default=None)
     ap.add_argument("--no-plot", action="store_true")
     args = ap.parse_args()
 
-    budgets = args.budgets if args.budgets is not None else config.SIZE_SWEEP["budgets"]
+    L, U = config.SIZE_SWEEP["L"], config.SIZE_SWEEP["U"]
+    budgets = args.budgets or config.SIZE_SWEEP["budgets"]
     mats = ["1", "2"] if args.matrix == "both" else [args.matrix]
-    bb = backbone_set()
-    s = config.SIZE_SWEEP
-    print(f"[sweep] model={args.model}  uniform L={s['L']} U={s['U']}  budgets={budgets}")
-    print(f"[sweep] binding band is {s['L']*config.K:.0f} < T < {s['U']*config.K:.0f} "
-          f"(K={config.K})")
+    bb = set(config.BACKBONE)
+    # only needed when the equity constraint is actually on
+    comms = load_communities() if "comm" in args.model else {}
 
-    rows = []          # long-format records
-    summary = []       # text blocks
-    per_matrix = {}    # matrix -> {site: {T: area}} for plotting
+    for m in mats:
+        if not config.quad_dat(m, "constant").exists():
+            raise SystemExit("run: python -m scripts.prepare_data")
 
-    for mid in mats:
-        prepare_quad(mid)
-        per_matrix[mid] = {}
+    print(f"model={args.model}  uniform bounds L={L:g} U={U:g}  budgets={budgets}")
+    print(f"budget only bites between {L*config.K:.0f} and {U*config.K:.0f} acres "
+          f"(K={config.K})\n")
+
+    rows, out_lines = [], []
+    per_matrix = {}                    # matrix -> {site: {T: acres}}
+
+    for m in mats:
+        rank = strengths(m)
+        per_matrix[m] = {}
         for T in budgets:
-            obj, area = solve(mid, args.model, T)
-            slack = T / (config.K * s["U"])
-            summary.append(f"\nMatrix {mid}  |  T={T:g}  (slack {slack:.2f})  |  "
-                           f"objective={obj:.4f}  |  {len(area)} sites")
-            from collections import defaultdict
+            obj, acres = solve(m, args.model, T)
+            maxed = sum(1 for v in acres.values() if v >= U - 1e-6)
+            floored = sum(1 for v in acres.values() if v <= L + 1e-6)
+            print(f"  M{m} T={T:<6g} obj={obj:10.2f}  {maxed} maxed, {floored} floored, "
+                  f"{len(acres)-maxed-floored} in between")
+
+            out_lines.append(f"\nMatrix {m}  |  T={T:g}  |  objective={obj:.4f}  "
+                             f"|  {len(acres)} sites")
             grp = defaultdict(list)
-            for site, ac in area.items():
-                grp[round(ac, 1)].append(site)
-            for ac in sorted(grp, reverse=True):
-                sites_lbl = ", ".join(f"{st}{'*' if st in bb else ''}" for st in sorted(grp[ac]))
-                summary.append(f"   {ac:6.1f} ac : {sites_lbl}")
-            for site, ac in area.items():
-                rows.append({"matrix": mid, "model": args.model, "T": T,
-                             "site": site, "selected": 1, "area": ac,
-                             "backbone": int(site in bb)})
-                per_matrix[mid].setdefault(site, {})[T] = ac
-            print(f"  [M{mid}] T={T:g}  obj={obj:.4f}  "
-                  f"maxed={sum(1 for v in area.values() if abs(v-s['U'])<1e-6)}  "
-                  f"floored={sum(1 for v in area.values() if abs(v-s['L'])<1e-6)}  "
-                  f"interior={sum(1 for v in area.values() if s['L']+1e-6<v<s['U']-1e-6)}")
+            for site, a in acres.items():
+                grp[a].append(site)
+            for a in sorted(grp, reverse=True):
+                tagged = ", ".join(f"{s}{'*' if s in bb else ''}" for s in sorted(grp[a]))
+                out_lines.append(f"   {a:6.1f} ac : {tagged}")
 
-    # ---- area-core diagnostic: selection stability + area-priority core ----
-    U = s["U"]; eps = 1e-6
-    diag = ["", "="*64, "AREA-CORE DIAGNOSTIC", "="*64]
-    for mid in mats:
-        site_map = per_matrix[mid]                     # {site: {T: area}}
-        sel_by_T = {T: {st for st, tm in site_map.items() if T in tm} for T in budgets}
-        set_constant = all(sel_by_T[T] == sel_by_T[budgets[0]] for T in budgets)
-        sel_core = set.intersection(*sel_by_T.values()) if sel_by_T else set()
-        # area-priority core: at (or within eps of) the ceiling U at EVERY budget
-        area_core = sorted(st for st, tm in site_map.items()
-                           if all(tm.get(T, 0) >= U - eps for T in budgets))
-        # backbone sites floored (<= L+eps) at every budget
-        floored_bb = sorted(st for st, tm in site_map.items()
-                            if st in bb and all(tm.get(T, U) <= s["L"] + eps for T in budgets))
-        ranks = load_strength_ranks(mid)
+            # with comm+size you also want to know WHERE the acres landed, since
+            # the whole point of the constraint is to spread them around
+            if comms:
+                out_lines.append("   by community:")
+                for c in sorted(comms):
+                    here = sorted(set(acres) & set(comms[c]))
+                    ac_here = sum(acres[s] for s in here)
+                    rmin = config.COMMUNITY_MINS[c]
+                    tight = " (at the minimum)" if len(here) == rmin else ""
+                    out_lines.append(
+                        f"     C{c} {config.COMM_NAMES[c]:<18} "
+                        f"{len(here)}/{rmin} sites{tight:<18} "
+                        f"{ac_here:6.1f} ac ({100*ac_here/T:4.1f}% of budget)")
+                    out_lines.append("        " + ", ".join(
+                        f"{s}{'*' if s in bb else ''}={acres[s]:g}ac" for s in here))
 
-        diag.append(f"\nMatrix {mid}")
-        diag.append(f"  selected set constant across budgets? {set_constant}  "
-                    f"(|core selected| = {len(sel_core)} of 25)")
-        diag.append(f"  AREA-PRIORITY CORE (>= {U:g} ac at every T): {area_core}")
-        if ranks:
-            for st in area_core:
-                r = ranks.get(st, {})
-                bbtag = "  [backbone]" if st in bb else ""
-                diag.append(f"     site {st:>3}: out-strength rank {r.get('out','?'):>2}, "
-                            f"in-strength rank {r.get('in','?'):>2}, "
-                            f"self-recruit {r.get('self',0):>12,.0f}{bbtag}")
-        diag.append(f"  BACKBONE sites floored (5 ac) at every T: {floored_bb}")
-        if ranks:
-            for st in floored_bb:
-                r = ranks.get(st, {})
-                diag.append(f"     site {st:>3}: out-strength rank {r.get('out','?'):>2}, "
-                            f"in-strength rank {r.get('in','?'):>2}  "
-                            f"(bridge/connector, weak source)")
-        print(f"\n  [M{mid}] set constant across T: {set_constant} | "
-              f"area-core {area_core} | floored backbone {floored_bb}")
-    summary += diag
+            for site, a in acres.items():
+                rows.append({"matrix": f"M{m}", "model": args.model, "T": T,
+                             "site": site, "acres": a, "backbone": int(site in bb)})
+                per_matrix[m].setdefault(site, {})[T] = a
 
-    # ---- write CSV ----
+    # ---- who actually got the money? ----
+    out_lines += ["", "=" * 64, "WHERE THE ACRES WENT", "=" * 64]
+    for m in mats:
+        rank = strengths(m)
+        smap = per_matrix[m]
+
+        # picked at every budget, and maxed out at every budget
+        always_max = sorted(s for s, t in smap.items()
+                            if all(t.get(T, 0) >= U - 1e-6 for T in budgets))
+        # backbone sites that never get more than the minimum
+        always_floor = sorted(s for s, t in smap.items()
+                              if s in bb and all(t.get(T, U) <= L + 1e-6 for T in budgets))
+        picked_every_T = set.intersection(*[{s for s, t in smap.items() if T in t}
+                                            for T in budgets])
+
+        out_lines.append(f"\nMatrix {m}")
+        out_lines.append(f"  picked at every budget: {len(picked_every_T)} of {config.K}")
+        out_lines.append(f"  MAXED OUT at every budget: {always_max}")
+        for s in always_max:
+            o, i, self_r = rank[s]
+            out_lines.append(f"     site {s:>3}: out-strength rank {o:>2}, in-strength rank "
+                             f"{i:>2}, self-recruitment {self_r:>12,.0f}"
+                             f"{'  [backbone]' if s in bb else ''}")
+        out_lines.append(f"  BACKBONE sites stuck at the {L:g} ac floor every time: {always_floor}")
+        for s in always_floor:
+            o, i, _ = rank[s]
+            out_lines.append(f"     site {s:>3}: out-strength rank {o:>2}, in-strength rank {i:>2}"
+                             f"  -- it's a receiver, not a source. Acres buy outgoing")
+            out_lines.append(f"              larvae, and this site doesn't send many.")
+        print(f"\n  M{m}: always maxed {always_max} | backbone always floored {always_floor}")
+
+    # ---- save ----
     config.RUNS_DIR.mkdir(exist_ok=True)
-    csv_path = config.RUNS_DIR / "size_sweep.csv"
-    with open(csv_path, "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["matrix", "model", "T", "site", "selected", "area", "backbone"])
+    with open(config.RUNS_DIR / "size_sweep.csv", "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=["matrix", "model", "T", "site", "acres", "backbone"])
         w.writeheader()
         w.writerows(rows)
-    print(f"\n[sweep] wrote {csv_path}  ({len(rows)} rows)")
+    head = [f"REEF-SIZE BUDGET SWEEP (model={args.model}, uniform L={L:g} U={U:g})",
+            "* = one of the 7 backbone sites", "=" * 64]
+    (config.RUNS_DIR / "size_sweep_summary.txt").write_text(
+        "\n".join(head + out_lines) + "\n", encoding="utf-8")
+    print(f"\n-> runs/size_sweep.csv, runs/size_sweep_summary.txt")
 
-    # ---- write summary ----
-    head = [f"REEF-SIZE BUDGET SWEEP  (model={args.model}, uniform L={s['L']} U={s['U']})",
-            "'*' marks a global-backbone site.", "="*64]
-    (config.RUNS_DIR / "size_sweep_summary.txt").write_text("\n".join(head + summary) + "\n")
-    print(f"[sweep] wrote {config.RUNS_DIR / 'size_sweep_summary.txt'}")
-
-    # ---- optional plot: per-site acres vs T ----
+    # ---- plot ----
     if not args.no_plot:
         try:
             import matplotlib
             matplotlib.use("Agg")
             import matplotlib.pyplot as plt
             config.FIG_DIR.mkdir(exist_ok=True)
-            for mid, site_map in per_matrix.items():
+            for m, smap in per_matrix.items():
                 fig, ax = plt.subplots(figsize=(7, 5))
-                for site, tmap in sorted(site_map.items()):
+                for site, tmap in sorted(smap.items()):
                     xs = sorted(tmap)
                     ys = [tmap[t] for t in xs]
-                    is_bb = site in bb
-                    ax.plot(xs, ys, marker="o", lw=2 if is_bb else 1,
-                            color="crimson" if is_bb else "0.6",
-                            alpha=0.95 if is_bb else 0.5, zorder=3 if is_bb else 1)
-                    if is_bb:
-                        ax.annotate(str(site), (xs[-1], ys[-1]), fontsize=8,
-                                    color="crimson", xytext=(3, 0), textcoords="offset points")
+                    on_bb = site in bb
+                    ax.plot(xs, ys, marker="o", lw=2 if on_bb else 1,
+                            color="crimson" if on_bb else "0.6",
+                            alpha=0.95 if on_bb else 0.5, zorder=3 if on_bb else 1)
+                    if on_bb:
+                        ax.annotate(str(site), (xs[-1], ys[-1]), fontsize=8, color="crimson",
+                                    xytext=(3, 0), textcoords="offset points")
                 ax.set_xlabel("total area budget T (acres)")
-                ax.set_ylabel("acres allocated to site")
-                ax.set_title(f"Reef-size allocation vs budget — Matrix {mid}\n"
-                             f"(red = 7-site backbone; uniform L={s['L']}, U={s['U']})")
+                ax.set_ylabel("acres given to the site")
+                ax.set_title(f"Where the acres go as the budget grows -- Matrix {m}\n"
+                             f"(red = backbone; uniform L={L:g}, U={U:g})")
                 ax.grid(alpha=0.3)
-                out = config.FIG_DIR / f"size_sweep_matrix{mid}.png"
-                fig.tight_layout(); fig.savefig(out, dpi=150); plt.close(fig)
-                print(f"[sweep] wrote {out}")
+                fig.tight_layout()
+                fig.savefig(config.FIG_DIR / f"size_sweep_matrix{m}.png", dpi=150)
+                plt.close(fig)
+                print(f"-> figures/size_sweep_matrix{m}.png")
         except ImportError:
-            print("[sweep] matplotlib not available; skipping plot")
+            print("(no matplotlib, skipping the plot)")
 
-    # ---- cleanup temp dat ----
-    if TMP_SIZE_DAT.exists():
-        TMP_SIZE_DAT.unlink()
+    TMP_DAT.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

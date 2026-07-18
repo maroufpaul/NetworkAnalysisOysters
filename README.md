@@ -71,6 +71,7 @@ NetworkAnalysisOysters/
 │   ├── run_iterated.py                # MIQP, realistic P0: the problem + the ODE fix
 │   ├── run_extra.py                   # backbone, fidelity, K sweep, self-recruitment
 │   ├── size_sweep.py                  # reef area vs budget, uniform bounds
+|   ├── run_jars.py                    # run JARS ODE
 │   ├── network_core_analysis.py       # centrality of all 49 sites
 │   ├── settling_time.py               # equilibrium-convergence check (t = 1000)
 │   └── check_ampl_env.py              # is AMPL + Gurobi actually on PATH?

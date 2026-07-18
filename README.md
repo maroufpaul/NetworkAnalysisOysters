@@ -169,16 +169,73 @@ The full table for each matrix is auto-saved to `runs/oyster_index_mapping_matri
 
 ---
 
+
 ## ⚙️ Installation and Setup
 
-```bash
-git clone https://github.com/maroufpaul/NetworkAnalysisOysters.git
-cd NetworkAnalysisOysters
+### Get the repository
 
-conda create -n oysters python=3.10
-conda activate oysters
-pip install -r requirements.txt
+Choose one of the following options:
+
+#### Option 1: Clone the repository
+
+> **Contribution note:** Please do not commit or push changes directly to the `main` branch. Create a separate branch for your work.
+
+#### Option 2: Fork the repository
+
+If you plan to modify the code and do not have write access to this repository, fork it on GitHub and clone your fork:
+
+
+#### Option 3: Download the ZIP file
+
+If you only want to run the project and do not need Git version control:
+
+1. Select **Code** on the GitHub repository page.
+2. Select **Download ZIP**.
+3. Extract the downloaded file.
+4. Open a terminal inside the extracted `NetworkAnalysisOysters` directory.
+````
+
+
+```bash
+cd NetworkAnalysisOysters
 ```
+
+### Python `venv` (THIS IS RECOMMENDED NOT NECESSARY)
+
+`venv` is included with Python and does not require Conda.
+
+#### Windows PowerShell
+
+```powershell
+py -3.10 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+## 🔑 AMPL + Gurobi License
+
+The MIQP scripts (`run_miqp`, `run_iterated`, `size_sweep`, `run_extra`) need
+**AMPL** and **Gurobi**. Both are commercial but **free for academics**. (The
+`run_heuristics` layer needs neither.)
+
+- **Gurobi** — get an academic license key from the [Gurobi User Portal](https://portal.gurobi.com/),
+  then run `grbgetkey <your-key>`. This writes `gurobi.lic` to your home folder,
+  where the solver finds it automatically. Set `GRB_LICENSE_FILE` if you put it
+  elsewhere.
+- **AMPL** — `pip install amplpy` ships a community edition that covers a model
+  this size. Academic AMPL licenses are often temporary, so check the expiry.
+
+### Verify AMPL and Gurobi
+
+The MIQP scripts require **AMPL** and a licensed **Gurobi** installation available on `PATH`. Verify the solver setup with:
+
+```bash
+python -m scripts.check_ampl_env
+```
+
+> Run every command from the repository root so that imports such as `import config` resolve correctly.
 
 The MIQP scripts need **AMPL + a licensed Gurobi on PATH**. Verify with:
 

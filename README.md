@@ -43,13 +43,13 @@ The pipeline has three modeling layers:
 
 ### The five scripts
 
-| Script | Role | Time |
-| --- | --- | --- |
-| `scripts/prepare_data.py` | Excel + `config.py` → AMPL data. Verifies the communities partition the 49 sites. | ~10 s |
-| `scripts/run_miqp.py` | MIQP, **constant `P₀`**. base / comm / size / comm+size × both matrices. | ~5 s |
-| `scripts/run_heuristics.py` | ODE search: greedy / swap / stingy × both matrices × constant + realistic `P₀`. Parallel. | ~15 min |
-| `scripts/run_iterated.py` | MIQP, **realistic `P₀`**: the frozen-`A*` failure, then the ODE-feedback fix. | ~10 min |
-| `scripts/run_extra.py` | Backbone, surrogate fidelity, K sweep, self-recruitment. Reads what the others wrote. | ~2 min |
+| Script | Role |
+| --- | --- | 
+| `scripts/prepare_data.py` | Excel + `config.py` → AMPL data. Verifies the communities partition the 49 sites. | 
+| `scripts/run_miqp.py` | MIQP, **constant `P₀`**. base / comm / size / comm+size × both matrices. 
+| `scripts/run_heuristics.py` | ODE search: greedy / swap / stingy × both matrices × constant + realistic `P₀`. Parallel. Takes 10-15 min to run|
+| `scripts/run_iterated.py` | MIQP, **realistic `P₀`**: the frozen-`A*` failure, then the ODE-feedback fix. |
+| `scripts/run_extra.py` | Backbone, surrogate fidelity, K sweep, self-recruitment. Reads what the others wrote. |
 
 Plus three utilities: `size_sweep.py` (reef area vs budget), `network_core_analysis.py` (centrality), `settling_time.py` (why `t = 1000`), and `check_ampl_env.py` (is the solver wired up).
 
@@ -115,7 +115,7 @@ NetworkAnalysisOysters/
 
 Hand-maintained: `config.py`, `data/`, `ampl/*.mod`, the `.py` files. **Everything in `runs/` and every `ampl/*.dat` is generated** — delete and re-run.
 
-**Why the `.dat` files are split by matrix and `P₀` mode.** There used to be one `ampl/oyster_quad.dat` that `prepare_data` overwrote for each matrix, so only M2 survived. The MIQP then read that file while using `--matrix` only to pick the (identical) label mapping — and silently solved the wrong matrix with no error. Four separate files (`oyster_quad_M{1,2}_{constant,realistic}.dat`) make that impossible to express.
+** The `.dat` files are split by matrix and `P₀` mode.** 
 
 ---
 

@@ -406,10 +406,10 @@ Under constant `P₀` that's fine: every reef settles near the same density, and
 
 ---
 
-### Inspecting reefs directly — `run_jars.py`
+## Inspecting reefs directly — `run_jars.py`
 
 A small utility to run the JARS biology simulation on any reef set straight from
-the terminal — no Python needed. Useful for sanity-checking a design or seeing
+the terminal . Useful for sanity-checking a design or seeing
 the network effect for yourself. Pass site **labels** (10, 37, …), not the 0–48
 AMPL indices.
 
@@ -418,8 +418,10 @@ python -m scripts.run_jars --sites 37                  # one reef, all 4 matrix�
 python -m scripts.run_jars --sites 10 31 37 40 41 49 53 --densities   # a set, with per-reef adults
 python -m scripts.run_jars --all                       # all 49 candidates
 python -m scripts.run_jars --each --sites 10 37 41     # each reef ALONE (isolated), batched
+python -m scripts.run_jars --sites 10 40 41 --matrix 2 --p0 constant # use  matrix 2 with external flow constant
+python -m scripts.run_jars --sites 10 40 41 --matrix 1 --p0 realistic  # use  matrix 1 with external flow realistic
 ```
-
+Other cases similarly...
 Defaults to both matrices × both supply modes; narrow with `--matrix 1|2` and
 `--p0 constant|realistic`. `--densities` prints each reef's own adult density (not
 just the total F); `--each` runs every listed reef in isolation; `--csv PATH`

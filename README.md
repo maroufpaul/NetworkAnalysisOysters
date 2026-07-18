@@ -224,7 +224,7 @@ The MIQP scripts (`run_miqp`, `run_iterated`, `size_sweep`, `run_extra`) need
   then run `grbgetkey <your-key>`. This writes `gurobi.lic` to your home folder,
   where the solver finds it automatically. Set `GRB_LICENSE_FILE` if you put it
   elsewhere.
-- **AMPL** — `pip install amplpy` ships a community edition that covers a model
+- **AMPL** —  ships a community edition that covers a model
   this size. Academic AMPL licenses are often temporary, so check the expiry.
 
 ### Verify AMPL and Gurobi

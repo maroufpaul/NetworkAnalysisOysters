@@ -119,13 +119,13 @@ COMMUNITY_MINS = {1: 2, 2: 5, 3: 3, 4: 2, 5: 3}
 # --------------------------------------------------------------------------- #
 # Variable reef sizing
 # --------------------------------------------------------------------------- #
-# Upper bound is tiered by AMPL index: the first U_SPLIT indices get U_FIRST,
-# the rest get U_REST. (This reproduces the original size testbed exactly.)
+# Uniform reef-size bounds: every selected site may be built between L and U
+# acres. (Earlier versions capped the first 26 candidates at 50 and the rest at
+# 40, but that split was a site's list POSITION, not anything physical, so it is
+# dropped -- see size_sweep.py, which always used uniform bounds.)
 SIZE = {
     "L":           5.0,     # min reef area (acres) when a site is built
-    "U_FIRST":     50.0,    # max area for AMPL indices [0, U_SPLIT)
-    "U_REST":      40.0,    # max area for AMPL indices [U_SPLIT, n)
-    "U_SPLIT":     26,
+    "U":           50.0,    # max reef area (acres), same for every site
     "TotReefSize": 1000.0,  # total area budget (acres)
     "Sbar":        20.0,    # size-normalisation constant
 }

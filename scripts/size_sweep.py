@@ -5,7 +5,7 @@ The question: when you can't afford to max out every reef, where does the
 optimizer spend the acres?
 
 The canonical size model can't answer that honestly, because its ceiling is
-tiered by a site's POSITION in the list (config.SIZE.U_SPLIT: first 26 get 50
+uniform now, but this script exists to sweep the budget under uniform bounds (first 26 used to get 50
 acres, the rest get 40). So "site X got 50 and site Y got 40" tells you nothing
 about X and Y. Here every site gets the SAME bounds, and we sweep the budget
 instead. Now if acreage piles up somewhere, that's the network talking.
@@ -17,7 +17,7 @@ sweep in between.
     python -m scripts.size_sweep                        # both matrices
     python -m scripts.size_sweep --matrix 1
     python -m scripts.size_sweep --model comm+size      # with the equity constraint
-    python -m scripts.size_sweep --budgets 200 400 600 800 1000
+    python -m scripts.size_sweep --budgets 300 500 750 1000
     python -m scripts.size_sweep --no-plot
 
 Writes runs/size_sweep.csv, runs/size_sweep_summary.txt,

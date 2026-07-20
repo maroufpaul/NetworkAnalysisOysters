@@ -32,21 +32,26 @@ from src.model.jars_ode import load_connectivity, odesys, setP0
 from src.opt.evaluator import evaluate_subset
 
 
+# this file gets rewritten each time with the newest density weights
 TMP_DAT = config.AMPL_DIR / "oyster_iter.dat"
 
 
+# AMPL can print a lot, so this just keeps the normal console output clean
 class QuietAMPL(OutputHandler):
     """Discard routine AMPL and solver chatter; errors still raise normally."""
 
-    def output(self, kind, msg):  # noqa: D401, ARG002
+    def output(self, kind, msg):  
+        # yes, doing nothing here is intentional
         pass
 
 
 def load(matrix_id: str):
     """Load one connectivity matrix and retain the 49 candidate reefs."""
     conn, key = load_connectivity(config.MATRICES[config.matrix_key(matrix_id)])
+    # True for the 49 sites we actually use; ~ just flips the unwanted mask
     keep = ~np.isin(key, config.UNWANTED)
     labels = key[keep]
+    # np.ix_ is the clean way to grab the same kept rows and columns
     P1 = conn[np.ix_(keep, keep)] * config.P1SCALING
     Pe = setP0(labels).astype(float)
     return conn, key, labels, P1, Pe
@@ -54,6 +59,7 @@ def load(matrix_id: str):
 
 def F(sites, conn, key, want_densities: bool = False):
     """Evaluate a selected set with the realistic-supply JARS model."""
+    # small wrapper so every call below uses realistic Pe the same way
     return evaluate_subset(
         list(sites),
         conn,
@@ -65,11 +71,13 @@ def F(sites, conn, key, want_densities: bool = False):
 
 def one_reef(P1_ii: float, Pe_i: float) -> float:
     """Return one reef's equilibrium adult density under fixed larval input."""
+    # one reef still has the same four JARS state variables: J, A, R, S
     v0 = np.array(
         [config.IC["J"], config.IC["A"], config.IC["R"], config.IC["S"]],
         dtype=float,
     )
 
+    # solve_ivp wants a function of t and v, so the extra inputs go inside this lambda
     sol = solve_ivp(
         lambda t, v: odesys(
             t,
@@ -93,6 +101,7 @@ def one_reef(P1_ii: float, Pe_i: float) -> float:
 
 def alone_densities(P1: np.ndarray, Pe: np.ndarray) -> np.ndarray:
     """Compute each candidate's equilibrium when restored alone."""
+    # run the same one-reef solve for all 49 candidates
     return np.array(
         [one_reef(P1[i, i], Pe[i]) for i in range(len(Pe))],
         dtype=float,
@@ -107,6 +116,7 @@ def network_fallback_densities(
     densities: dict[int, float],
 ) -> tuple[np.ndarray, int]:
     """Estimate outsiders with inflow from the current selected network."""
+    # real labels are things like 10 or 53, but NumPy needs positions 0..48
     pos = {int(label): i for i, label in enumerate(labels)}
     picked_set = {int(site) for site in picked}
     picked_idx = np.array([pos[int(site)] for site in picked], dtype=int)
@@ -116,8 +126,10 @@ def network_fallback_densities(
     source_A = np.array([densities[int(site)] for site in picked], dtype=float)
     # This gives incoming larvae to every candidate from the selected network.
     # Rows are sources, columns are destinations, so the transpose lines everything up.
+    # @ is matrix multiplication here, not normal element-by-element multiplication
     incoming = P1[picked_idx, :].T @ (source_A ** config.ALPHA)
 
+    # start fresh, then fill selected reefs and estimate every outsider
     A_next = np.zeros(len(labels), dtype=float)
 
     for site, density in densities.items():
@@ -125,6 +137,7 @@ def network_fallback_densities(
 
     outsider_runs = 0
     for i, label in enumerate(labels):
+        # selected sites already got their real JARS density above
         if int(label) in picked_set:
             continue
 
@@ -147,9 +160,11 @@ def solve_miqp(
     # The clip is the last line of defense: A ** 1.72 is NaN for any negative A,
     # and a NaN here would sail into the .dat file and violate `param W >= 0`.
     # Everything feeding A is already non-negative, so this should never fire.
+    # [:, None] turns A into a column, so each source scales its whole outgoing row
     W = P1 * (np.maximum(A, 0.0) ** config.ALPHA)[:, None]
     n = len(labels)
 
+    # build a tiny AMPL .dat file by hand using the current W values
     lines = ["# written by run_iterated.py", "", "set N :="]
     lines += [f"  {i}" for i in range(n)]
     lines += [";", "", f"param K := {config.K};", "", "param Pe :="]
@@ -159,6 +174,7 @@ def solve_miqp(
         f"  [{i}, {j}] {W[i, j]:.6f}"
         for i in range(n)
         for j in range(n)
+        # skip zeros so the temporary file does not get needlessly huge
         if W[i, j] != 0
     ]
     lines += [";", ""]
@@ -167,6 +183,7 @@ def solve_miqp(
     ampl = AMPL()
     ampl.set_output_handler(QuietAMPL())
 
+    # whatever happens in the solve, finally below still closes AMPL
     try:
         ampl.eval("option solver gurobi;")
 
@@ -186,6 +203,7 @@ def solve_miqp(
         picked = sorted(
             site_labels[int(row[0])]
             for row in ampl.getVariable("x").getValues().to_list()
+            # x is binary, but AMPL returns it as a float
             if float(row[1]) > 0.5
         )
     finally:
@@ -211,6 +229,7 @@ def iterate(
 ) -> dict[str, Any]:
     """Alternate MIQP and JARS updates until a set repeats."""
     # We need this lookup later when the JARS densities come back keyed by real site label.
+    # real labels are things like 10 or 53, but NumPy needs positions 0..48
     pos = {int(label): i for i, label in enumerate(labels)}
     A = np.array(A0, dtype=float)
 
@@ -222,9 +241,11 @@ def iterate(
 
     for step in range(config.ITER["max_passes"]):
         picked = solve_miqp(matrix_id, labels, P1, Pe, A)
+        # tuples can be stored and compared cleanly; lists cannot be dictionary keys
         picked_key = tuple(picked)
 
         if picked_key in history:
+            # find where this repeated design first showed up
             first = history.index(picked_key)
 
             if picked_key == history[-1]:
@@ -259,12 +280,15 @@ def iterate(
         if trace:
             print(f"      round {step}: F={score:.6f}")
 
+        # sticky keeps old outsider guesses and only refreshes selected reefs later
         if fallback == "sticky":
             A_next = A.copy()
 
+        # isolated resets outsiders to what they can support completely alone
         elif fallback == "isolated":
             A_next = alone.copy()
 
+        # network lets outsiders feel larval input from the currently selected set
         elif fallback == "network":
             A_next, runs = network_fallback_densities(
                 labels, P1, Pe, picked, densities
@@ -307,6 +331,7 @@ def exp_astar(mats: list[str]) -> None:
         print(f"  {'A_STAR':>8}  {'F':>10}  {'% best':>8}")
 
         # designs tells us how many genuinely different site sets the sweep produced.
+        # a set removes duplicates, so this counts truly different selections
         designs = set()
         matrix_rows = []
 
@@ -316,6 +341,7 @@ def exp_astar(mats: list[str]) -> None:
                 labels,
                 P1,
                 Pe,
+                # frozen A_STAR means every source gets the exact same density guess
                 np.full(len(labels), a_star),
             )
             score = F(picked, conn, key)
@@ -377,6 +403,7 @@ def exp_iterated(
             for start in config.ITER["starts"]:
                 # None means use the isolated-density vector; numbers mean give every site that same starting A.
                 name = "alone" if start is None else str(start)
+                # either start from 49 separate alone values or one shared number
                 A0 = alone.copy() if start is None else np.full(len(labels), float(start))
 
                 result = iterate(
@@ -484,6 +511,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    # turn the command-line choices into lists so the loops below stay simple
     mats = ["1", "2"] if args.matrix == "both" else [args.matrix]
     rules = config.ITER["rules"] if args.fallback == "all" else [args.fallback]
 
@@ -495,6 +523,7 @@ def main() -> None:
     config.RUNS_DIR.mkdir(exist_ok=True)
     started = time.time()
 
+    # "all" just runs both experiment blocks one after the other
     if args.exp in ("astar", "all"):
         exp_astar(mats)
     if args.exp in ("iterated", "all"):

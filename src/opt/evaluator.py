@@ -20,6 +20,8 @@ def evaluate_subset(
     P0_mode: str = "realistic",
     consP0: float = config.CONST_P0,
     return_densities: bool = False,
+    method: str = "RK45",
+    rtol: float = 1e-6,
 ) -> float:
     """
     Core operation: run the JARS ODE on *just* the given site labels and
@@ -88,8 +90,8 @@ def evaluate_subset(
         lambda t, v: odesys(t, v, P0, P1, mu),
         [0, tmax],
         v0,
-        method="RK45",
-        rtol=1e-6,
+        method=method,
+        rtol=rtol,
     )
 
     v_final = sol.y[:, -1]

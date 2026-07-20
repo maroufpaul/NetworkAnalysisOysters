@@ -34,6 +34,7 @@ import numpy as np
 import pandas as pd
 
 import config
+from src.opt import heuristics as H
 
 # Each worker process loads the connectivity matrix once and reuses it. Globals
 # are ugly but this is how you avoid re-reading a 56x56 xlsx 900 times.
@@ -65,55 +66,35 @@ def score_one(pool, sites, p0_mode):
     return score_many(pool, [sites], p0_mode)[0]
 
 
+# The search logic now lives in src/opt/heuristics.py (one canonical copy,
+# shared with scripts.calibrate_real). These wrappers just bind the parallel
+# scorer to that core and keep the console progress line per step.
+
 def greedy(pool, p0_mode, tag):
-    chosen, left = [], config.CANDIDATE_SITES.tolist()
-    best = 0.0
-    for step in range(1, config.K + 1):
-        t = time.time()
-        scores = score_many(pool, [chosen + [c] for c in left], p0_mode)
-        i = int(np.argmax(scores))                 # ties -> first one
-        chosen.append(left.pop(i))
-        best = scores[i]
-        print(f"    [{tag}] greedy {step:2d}/{config.K}  +{chosen[-1]:<3} "
-              f"F={best:.6f}  ({time.time()-t:.0f}s)", flush=True)
-    return sorted(chosen), best
+    t = time.time()
+    sm = lambda sets: score_many(pool, sets, p0_mode)
+    sites, best, _ = H.greedy(sm, config.CANDIDATE_SITES.tolist(), config.K)
+    print(f"    [{tag}] greedy  F={best:.6f}  ({time.time()-t:.0f}s)", flush=True)
+    return sites, best
 
 
 def swap(pool, start, p0_mode, tag, max_passes=50):
-    cur = list(start)
-    score = score_one(pool, cur, p0_mode)
-    for p in range(1, max_passes + 1):
-        t = time.time()
-        outside = [s for s in config.CANDIDATE_SITES.tolist() if s not in cur]
-        # build every possible 1-for-1 swap, score them all at once
-        moves = [(out, inn) for out in cur for inn in outside]
-        trials = [[inn if s == out else s for s in cur] for out, inn in moves]
-        scores = score_many(pool, trials, p0_mode)
-        i = int(np.argmax(scores))
-        if scores[i] <= score + 1e-9:
-            print(f"    [{tag}] swap pass {p}: no swap helps, done  "
-                  f"({time.time()-t:.0f}s)", flush=True)
-            break
-        out, inn = moves[i]
-        cur = trials[i]
-        gain, score = scores[i] - score, scores[i]
-        print(f"    [{tag}] swap pass {p}: {out} -> {inn}  +{gain:.6f}  "
-              f"F={score:.6f}  ({time.time()-t:.0f}s)", flush=True)
-    return sorted(cur), score
+    t = time.time()
+    sm = lambda sets: score_many(pool, sets, p0_mode)
+    sites, score, trace = H.swap(sm, start, config.CANDIDATE_SITES.tolist(),
+                                 config.K, max_passes=max_passes)
+    for (out, inn), sc in trace:
+        print(f"    [{tag}] swap: {out} -> {inn}  F={sc:.6f}", flush=True)
+    print(f"    [{tag}] swap done  F={score:.6f}  ({time.time()-t:.0f}s)", flush=True)
+    return sites, score
 
 
 def stingy(pool, p0_mode, tag):
-    S = config.CANDIDATE_SITES.tolist()
-    score = score_one(pool, S, p0_mode)
-    while len(S) > config.K:
-        t = time.time()
-        scores = score_many(pool, [[s for s in S if s != d] for d in S], p0_mode)
-        i = int(np.argmax(scores))                 # whichever we miss least
-        gone = S.pop(i)
-        score = scores[i]
-        print(f"    [{tag}] stingy {len(S):2d}/{config.K}  -{gone:<3} "
-              f"F={score:.6f}  ({time.time()-t:.0f}s)", flush=True)
-    return sorted(S), score
+    t = time.time()
+    sm = lambda sets: score_many(pool, sets, p0_mode)
+    sites, score, _ = H.stingy(sm, config.CANDIDATE_SITES.tolist(), config.K)
+    print(f"    [{tag}] stingy  F={score:.6f}  ({time.time()-t:.0f}s)", flush=True)
+    return sites, score
 
 
 def main():

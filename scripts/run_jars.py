@@ -24,6 +24,9 @@ constant/realistic = 4 results). Narrow it with --matrix and/or --p0.
     # per-reef densities, and save to CSV
     python -m scripts.run_jars --all --densities --csv runs/my_jars_run.csv
     
+    # just per-reef densities
+    python -m scripts.run_jars --all --densities 
+    
     # every listed reef ALONE (isolated), batched
     python -m scripts.run_jars --each --sites 10 31 37 40 41 49 53
 

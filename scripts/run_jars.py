@@ -79,7 +79,7 @@ def run_one(sites, matrix_id, p0_mode, show_densities):
     """One matrix + one supply mode. Returns rows for the optional CSV."""
     conn, key = load_connectivity(config.MATRICES[config.matrix_key(matrix_id)])
     F, dens = evaluate_subset(sites, conn, key, P0_mode=p0_mode,
-                              consP0=config.CONST_P0, return_densities=True)
+                              consP0=config.CONST_P0, return_densities=True) # this evaluates K number of sites and calls real JARS code
 
     print("=" * 56)
     print(f"M{matrix_id}  |  supply={p0_mode}  |  {len(sites)} reef(s)")

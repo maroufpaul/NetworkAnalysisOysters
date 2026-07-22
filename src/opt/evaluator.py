@@ -86,6 +86,7 @@ def evaluate_subset(
     v0[3*n:4*n] = S0
 
     # integrate
+    # odesys is implemented in the jars_ode module (real jars code)
     sol = solve_ivp(
         lambda t, v: odesys(t, v, P0, P1, mu),
         [0, tmax],

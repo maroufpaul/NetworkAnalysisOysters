@@ -2,12 +2,8 @@
 
 This repository contains the full experimental and modeling framework for the **Oyster Reef Site Selection Problem (ORSSP)** — combining biological ODE simulation, ODE-driven heuristics, and mixed-integer quadratic programming (MIQP). Developed under the supervision of **Prof. Rex Kincaid** (William & Mary), with biological collaborators **Prof. Leah Shaw** (W&M) and **Prof. Rom Lipcius** (VIMS), the project integrates ecological modeling with network optimization to inform data-driven coastal restoration planning.
 
-Everything is driven by [`config.py`](config.py). Five scripts do the work — one job each — and each talks to AMPL directly, with no wrapper layers.
-
-> A full technical report is in [`docs/Oyster_Project_Report.pdf`](docs/Oyster_Project_Report.pdf) (LaTeX source alongside it). It has the full methods, all 16 post-search and exact designs, the network-centrality analysis, the equilibrium-convergence justification for the `t = 1000` horizon, and the self-recruitment sensitivity check.
 
 ---
-
 ## 🌍 Background and Motivation
 
 The Chesapeake Bay historically supported more than **10 billion oysters**; today the population sits below **1%** of that baseline due to overharvesting, habitat loss, and disease. Restoration is expensive, so the question is not whether to restore but **where**:
